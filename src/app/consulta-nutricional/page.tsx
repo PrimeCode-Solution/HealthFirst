@@ -37,8 +37,8 @@ export default function ConsultaNutricionalPage() {
             className="rounded-lg object-cover w-full max-h-[180px]"
             priority
           />
-          <p className="mt-5 text-[14px] text-gray-700 leading-relaxed">
-            Na <strong>NAME</strong>, acreditamos que a nutrição é a base da saúde geral. 
+          <p className="mt-8 text-[18px] text-gray-700 leading-relaxed">
+            Na NAME, acreditamos que a nutrição é a base da saúde geral. 
             Nossos serviços de consultoria nutricional são projetados para ajudá-lo a atingir seus objetivos de saúde 
             por meio de orientação alimentar personalizada. Se você deseja controlar uma condição de saúde específica, 
             melhorar seus níveis de energia ou simplesmente adotar um estilo de vida mais saudável, nossos nutricionistas 
@@ -48,7 +48,7 @@ export default function ConsultaNutricionalPage() {
 
         {/* Conteúdo gratuito */}
         <section className="w-full mt-10">
-          <h2 className="text-[18px] font-semibold text-[#0D1C14] mb-5">
+          <h2 className="text-[25px] font-semibold text-[#0D1C14] mb-5">
             Conteúdo gratuito
           </h2>
           <div className="grid gap-4 md:grid-cols-3">
@@ -60,11 +60,11 @@ export default function ConsultaNutricionalPage() {
                 <Image
                   src={item.img}
                   alt={item.title}
-                  width={38}
+                  width={48}
                   height={38}
                   className="rounded object-cover"
                 />
-                <span className="text-[14px] font-semibold text-[#0D1C14]">
+                <span className="text-[16px] font-semibold text-[#0D1C14]">
                   {item.title}
                 </span>
               </div>
@@ -74,7 +74,7 @@ export default function ConsultaNutricionalPage() {
 
         {/* Conteúdo Premium */}
         <section className="w-full mt-12">
-          <h2 className="text-[18px] font-semibold text-[#0D1C14] mb-6">
+          <h2 className="text-[25px] font-semibold text-[#0D1C14] mb-6">
             Conteúdo Premium
           </h2>
           <div className="space-y-5">
@@ -85,20 +85,19 @@ export default function ConsultaNutricionalPage() {
               >
                 <div className="flex-1 space-y-2">
                   <span
-                    className="inline-block px-3 py-1 text-white text-[12px] rounded"
-                    style={{ backgroundColor: "#4F9678" }}
+                    className="inline-block px- py-1 text-[#4F9678] text-[18px] rounded"
                   >
                     {item.badge}
                   </span>
-                  <h3 className="text-[16px] font-semibold text-[#0D1C14]">
+                  <h3 className="text-[19px] font-semibold text-[#0D1C14]">
                     {item.title}
                   </h3>
-                  <p className="text-[14px] text-gray-700 leading-relaxed">
+                  <p className="text-[17px] text-[#4F9678] leading-relaxed">
                     {item.desc}
                   </p>
                   <Button
                     variant="outline"
-                    className="mt-2 h-9 px-4 border border-gray-300 text-[14px] font-semibold text-gray-800"
+                    className="mt-2 h-9 px-4 border border-[#E8F2ED] text-[14px] font-semibold text-gray-800"
                   >
                     Inscreva-se agora
                   </Button>
@@ -109,8 +108,7 @@ export default function ConsultaNutricionalPage() {
                     alt={item.title}
                     width={309}
                     height={165}
-                    className="rounded-[8px] object-cover opacity-100"
-                    style={{ transform: "rotate(0deg)" }}
+                    className="rounded-[10px] object-cover opacity-100 "
                   />
                 </div>
               </div>
