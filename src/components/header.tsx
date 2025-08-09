@@ -3,16 +3,17 @@
 import * as React from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { NavigationMenu, NavigationMenuContent, NavigationMenuItem, NavigationMenuLink, NavigationMenuList, NavigationMenuTrigger } from "@/components/ui/navigation-menu"
+import { NavigationMenu, NavigationMenuItem, NavigationMenuLink, NavigationMenuList } from "@/components/ui/navigation-menu"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
-import { Menu, Phone, MapPin, Clock } from "lucide-react"
+import { Menu } from "lucide-react"
 import { cn } from "@/lib/utils"
+import Image from "next/image"
 
 const navigationItems = [
-  { title: "Início", href: "/" },
+  { title: "Consultas", href: "/consultas" },
   { title: "Recursos", href: "/recursos" },
-  { title: "Especialidades", href: "/especialidades" },
-  { title: "Sobre Nós", href: "/sobre" },
+  { title: "Serviços", href: "/servicos" },
+  { title: "Sobre nós", href: "/sobre" },
   { title: "Contato", href: "/contato" },
 ]
 
@@ -20,46 +21,19 @@ export function Header() {
   const [isOpen, setIsOpen] = React.useState(false)
 
   return (
-    <header className="w-full bg-white shadow-sm">
-      {/* Top bar with contact info */}
-      <div className="bg-primary/5 py-2">
-        <div className="container mx-auto px-4">
-          <div className="flex flex-wrap items-center justify-between text-sm text-muted-foreground">
-            <div className="flex items-center gap-6">
-              <div className="flex items-center gap-2">
-                <Phone className="h-4 w-4" />
-                <span>(82) 99999-9999</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <MapPin className="h-4 w-4" />
-                <span>Arapiraca, AL</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Clock className="h-4 w-4" />
-                <span>Seg-Sex: 8h às 18h</span>
-              </div>
-            </div>
-            <div className="hidden md:block">
-              <span>Emergência 24h: (82) 98888-8888</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Main navigation */}
+    <header className="w-full bg-white border-b border-gray-200">
       <div className="container mx-auto px-4">
-        <div className="flex h-16 items-center justify-between">
+        <div className="flex h-20 items-center justify-between">
           {/* Logo */}
           <Link href="/" className="flex items-center space-x-2">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-white font-bold text-lg">
-              H+
-            </div>
-            <div className="flex flex-col">
-              <span className="text-lg font-bold text-foreground">HealthFirst</span>
-              <span className="text-xs text-muted-foreground">Cuidando de você</span>
-            </div>
+            <Image
+              src="/images/home/logo-principal.svg" 
+              alt="HealthFirst Logo"
+              width={100}  
+              height={100} 
+              className="h-50 w-50"
+            />
           </Link>
-
           {/* Desktop Navigation */}
           <NavigationMenu className="hidden md:flex">
             <NavigationMenuList>
@@ -68,7 +42,7 @@ export function Header() {
                   <NavigationMenuLink
                     href={item.href}
                     className={cn(
-                      "group inline-flex h-9 w-max items-center justify-center rounded-md bg-background px-4 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus:outline-none disabled:pointer-events-none disabled:opacity-50"
+                      "group inline-flex h-9 w-max items-center justify-center rounded-md bg-transparent px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus:outline-none"
                     )}
                   >
                     {item.title}
@@ -78,13 +52,13 @@ export function Header() {
             </NavigationMenuList>
           </NavigationMenu>
 
-          {/* CTA Button */}
-          <div className="hidden md:flex items-center space-x-4">
-            <Button variant="outline" size="sm">
-              Login
+          {/* CTA Buttons */}
+          <div className="hidden md:flex items-center space-x-2">
+            <Button variant="ghost">
+              Entrar
             </Button>
-            <Button size="sm">
-              Agendar Consulta
+            <Button>
+              Inscreva-se
             </Button>
           </div>
 
@@ -97,7 +71,7 @@ export function Header() {
               </Button>
             </SheetTrigger>
             <SheetContent side="right" className="w-[300px] sm:w-[400px]">
-              <nav className="flex flex-col space-y-4">
+              <nav className="flex flex-col space-y-4 pt-8">
                 {navigationItems.map((item) => (
                   <Link
                     key={item.title}
@@ -108,12 +82,12 @@ export function Header() {
                     {item.title}
                   </Link>
                 ))}
-                <div className="flex flex-col space-y-2 pt-4">
-                  <Button variant="outline" className="w-full">
-                    Login
+                <div className="flex flex-col space-y-2 pt-4 border-t">
+                  <Button variant="ghost" className="w-full justify-start">
+                    Entrar
                   </Button>
-                  <Button className="w-full">
-                    Agendar Consulta
+                  <Button className="w-full justify-start">
+                    Inscreva-se
                   </Button>
                 </div>
               </nav>
