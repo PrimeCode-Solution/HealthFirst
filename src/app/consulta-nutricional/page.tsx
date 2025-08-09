@@ -1,9 +1,30 @@
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 
+const conteudoGratuito = [
+  { img: "/imagens/pagina_nutricional/mini1.webp", title: "O poder de uma dieta equilibrada" },
+  { img: "/imagens/pagina_nutricional/mini2.webp", title: "Receitas para uma alimentação saudável" },
+  { img: "/imagens/pagina_nutricional/mini3.webp", title: "Dicas para um estilo de vida mais saudável" }
+];
+
+const conteudoPremium = [
+  {
+    badge: "Exclusivo",
+    title: "Planos alimentares personalizados",
+    desc: "Desbloqueie o acesso a planos alimentares personalizados, adaptados às suas necessidades específicas e objetivos de saúde. Nossos nutricionistas criarão um plano adequado ao seu estilo de vida e preferências.",
+    img: "/imagens/pagina_nutricional/premium1.webp",
+  },
+  {
+    badge: "Premium",
+    title: "Guias nutricionais",
+    desc: "Acesse guias completos sobre diversos temas de nutrição, desde controle de doenças até fortalecimento da imunidade.",
+    img: "/imagens/pagina_nutricional/premium2.webp",
+  }
+];
+
 export default function ConsultaNutricionalPage() {
   return (
-    <div className="flex flex-col min-h-screen bg-white">
+    <div className="flex flex-col min-h-screen bg-gray-50">
       <main className="flex-1 flex flex-col items-center w-full px-6 py-8 max-w-[1100px] mx-auto">
 
         {/* Hero */}
@@ -31,11 +52,7 @@ export default function ConsultaNutricionalPage() {
             Conteúdo gratuito
           </h2>
           <div className="grid gap-4 md:grid-cols-3">
-            {[
-              { img: "/imagens/pagina_nutricional/mini1.webp", title: "O poder de uma dieta equilibrada" },
-              { img: "/imagens/pagina_nutricional/mini2.webp", title: "Receitas para uma alimentação saudável" },
-              { img: "/imagens/pagina_nutricional/mini3.webp", title: "Dicas para um estilo de vida mais saudável" }
-            ].map((item, i) => (
+            {conteudoGratuito.map((item, i) => (
               <div
                 key={i}
                 className="border border-gray-300 rounded-md flex items-center gap-3 p-3 bg-white hover:shadow-md transition-shadow duration-300"
@@ -61,20 +78,7 @@ export default function ConsultaNutricionalPage() {
             Conteúdo Premium
           </h2>
           <div className="space-y-5">
-            {[
-              {
-                badge: "Exclusivo",
-                title: "Planos alimentares personalizados",
-                desc: "Desbloqueie o acesso a planos alimentares personalizados, adaptados às suas necessidades específicas e objetivos de saúde. Nossos nutricionistas criarão um plano adequado ao seu estilo de vida e preferências.",
-                img: "/imagens/pagina_nutricional/premium1.webp",
-              },
-              {
-                badge: "Premium",
-                title: "Guias nutricionais",
-                desc: "Acesse guias completos sobre diversos temas de nutrição, desde controle de doenças até fortalecimento da imunidade.",
-                img: "/imagens/pagina_nutricional/premium2.webp",
-              }
-            ].map((item, i) => (
+            {conteudoPremium.map((item, i) => (
               <div
                 key={i}
                 className="flex flex-col md:flex-row items-center justify-between bg-gray-50 border border-gray-300 rounded-md p-4 gap-6"
@@ -103,9 +107,10 @@ export default function ConsultaNutricionalPage() {
                   <Image
                     src={item.img}
                     alt={item.title}
-                    width={180}
-                    height={120}
-                    className="rounded object-cover"
+                    width={309}
+                    height={165}
+                    className="rounded-[8px] object-cover opacity-100"
+                    style={{ transform: "rotate(0deg)" }}
                   />
                 </div>
               </div>
@@ -115,10 +120,7 @@ export default function ConsultaNutricionalPage() {
 
         {/* Botão de agendamento */}
         <section className="w-full mt-12 flex justify-center">
-          <Button
-            size="lg"
-            className="bg-[#22C55E] hover:bg-[#16A34A] text-white px-7 h-11 text-[15px] font-semibold rounded-md"
-          >
+          <Button size="lg">
             Agende uma consulta
           </Button>
         </section>
