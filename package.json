@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.1",
+    "@next/env": "^15.4.6",
     "@radix-ui/react-accordion": "^1.2.11",
     "@radix-ui/react-alert-dialog": "^1.1.14",
     "@radix-ui/react-aspect-ratio": "^1.1.7",
@@ -52,6 +53,8 @@
     "react-resizable-panels": "^3.0.4",
     "recharts": "^2.15.4",
     "sonner": "^2.0.7",
+    "styled-jsx": "^5.1.7",
+    "tailwind": "^2.3.1",
     "tailwind-merge": "^3.3.1",
     "vaul": "^1.1.2",
     "zod": "^4.0.15"
