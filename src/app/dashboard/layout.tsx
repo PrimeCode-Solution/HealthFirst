@@ -1,9 +1,9 @@
-import Providers from "../providers";
+import Provider from "../providers/provider";
 
 export default async function Layout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return <Providers>{children}</Providers>;
+  return <Provider>{children}</Provider>;
 }
