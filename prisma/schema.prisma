@@ -13,3 +13,268 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+// Enum para tipos de usuário
+enum UserRole {
+  ADMIN
+  USER
+}
+
+// Enum para status do agendamento
+enum AppointmentStatus {
+  PENDING     // Aguardando pagamento
+  CONFIRMED   // Pagamento confirmado
+  CANCELLED   // Cancelado
+  COMPLETED   // Concluído
+}
+
+// Enum para status do pagamento
+enum PaymentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+  REFUNDED
+}
+
+// Enum para status da assinatura
+enum SubscriptionStatus {
+  ACTIVE
+  INACTIVE
+  CANCELLED
+  EXPIRED
+}
+
+// Enum para tipos de consulta
+enum ConsultationType {
+  GENERAL     // Consulta geral
+  URGENT      // Urgente
+  FOLLOWUP    // Remarcação/Acompanhamento
+}
+
+// Model do usuário
+model User {
+  id        String   @id @default(cuid())
+  clerkId   String   @unique // ID único do Clerk
+  email     String   @unique
+  name      String
+  phone     String?
+  role      UserRole @default(USER)
+  
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relações
+  appointments   Appointment[]
+  subscription   Subscription?
+  ebooks         UserEbook[]
+  
+  @@map("users")
+}
+
+// Model para configurações de horários
+model BusinessHours {
+  id                String    @id @default(cuid())
+  
+  // Horários básicos
+  startTime         String    // "08:00"
+  endTime           String    // "18:00"
+  lunchBreakEnabled Boolean   @default(false)
+  lunchStartTime    String?   // "12:00"
+  lunchEndTime      String?   // "13:00"
+  
+  // Dias da semana disponíveis
+  mondayEnabled     Boolean   @default(true)
+  tuesdayEnabled    Boolean   @default(true)
+  wednesdayEnabled  Boolean   @default(true)
+  thursdayEnabled   Boolean   @default(true)
+  fridayEnabled     Boolean   @default(true)
+  saturdayEnabled   Boolean   @default(false)
+  sundayEnabled     Boolean   @default(false)
+  
+  // Configurações gerais
+  appointmentDuration Int     @default(30) // em minutos
+  
+  // Timestamps
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  @@map("business_hours")
+}
+
+// Model para agendamentos
+model Appointment {
+  id          String            @id @default(cuid())
+  userId      String
+  
+  // Dados do agendamento
+  date        DateTime
+  startTime   String           // "14:30"
+  endTime     String           // "15:00"
+  type        ConsultationType @default(GENERAL)
+  status      AppointmentStatus @default(PENDING)
+  
+  // Dados do cliente/paciente
+  patientName  String
+  patientEmail String?
+  patientPhone String?
+  notes        String?          // Observações
+  
+  // Timestamps
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  
+  // Relações
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payment     Payment?
+  
+  @@map("appointments")
+}
+
+// Model para pagamentos
+model Payment {
+  id                    String        @id @default(cuid())
+  appointmentId         String?       @unique
+  subscriptionId        String?       
+  
+  // Dados do Mercado Pago
+  mercadoPagoId         String?       @unique // ID do pagamento no MP
+  preferenceId          String?       // ID da preferência no MP
+  
+  // Dados do pagamento
+  amount                Decimal       @db.Decimal(10,2)
+  currency              String        @default("BRL")
+  description           String
+  status                PaymentStatus @default(PENDING)
+  
+  // Dados do pagador
+  payerEmail            String?
+  payerName             String?
+  payerPhone            String?
+  
+  // URLs de retorno
+  successUrl            String?
+  pendingUrl            String?
+  failureUrl            String?
+  
+  // Timestamps
+  paidAt                DateTime?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+  
+  // Relações
+  appointment           Appointment?  @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  subscription          Subscription? @relation(fields: [subscriptionId], references: [id])
+  
+  @@map("payments")
+}
+
+// Model para assinaturas (apenas para referência local)
+model Subscription {
+  id                  String             @id @default(cuid())
+  userId              String             @unique
+  
+  // Dados da assinatura no Mercado Pago
+  mercadoPagoId       String?            @unique
+  preapprovalId       String             // ID da assinatura recorrente no MP (OBRIGATÓRIO)
+  
+  // Dados básicos (podem vir do webhook ou ser consultados na API MP)
+  planName            String?
+  amount              Decimal?           @db.Decimal(10,2)
+  currency            String             @default("BRL")
+  status              SubscriptionStatus @default(INACTIVE)
+  
+  // Apenas para controle local (opcional)
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  
+  // Relações
+  user                User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payments            Payment[]
+  
+  @@map("subscriptions")
+}
+
+// Model para categorias de ebooks
+model EbookCategory {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relações
+  ebooks      Ebook[]
+  
+  @@map("ebook_categories")
+}
+
+// Model para ebooks
+model Ebook {
+  id              String        @id @default(cuid())
+  title           String
+  description     String?
+  categoryId      String
+  
+  // Arquivos
+  coverImage      String?       // URL da imagem de capa
+  filePath        String        // Caminho do arquivo PDF/EPUB/MOBI
+  fileSize        Int?          // Tamanho do arquivo em bytes
+  fileType        String        // "pdf", "epub", "mobi"
+  
+  // Configurações
+  isPremium       Boolean       @default(false) // Se é premium (só para assinantes)
+  isActive        Boolean       @default(true)
+  
+  // Timestamps
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  // Relações
+  category        EbookCategory @relation(fields: [categoryId], references: [id])
+  userEbooks      UserEbook[]
+  
+  @@map("ebooks")
+}
+
+// Model para relacionar usuários com ebooks (downloads/acesso)
+model UserEbook {
+  id         String   @id @default(cuid())
+  userId     String
+  ebookId    String
+  
+  // Timestamps
+  accessedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  
+  // Relações
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ebook      Ebook    @relation(fields: [ebookId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, ebookId])
+  @@map("user_ebooks")
+}
+
+// Model para webhooks do Mercado Pago
+model WebhookEvent {
+  id            String   @id @default(cuid())
+  
+  // Dados do webhook
+  action        String   // "payment.created", "payment.updated", etc.
+  apiVersion    String
+  dataId        String   // ID do recurso (payment, subscription, etc.)
+  dateCreated   DateTime
+  type          String   // "payment", "subscription", etc.
+  
+  // Dados brutos
+  rawData       Json     // Dados completos do webhook
+  processed     Boolean  @default(false)
+  
+  // Timestamps
+  createdAt     DateTime @default(now())
+  
+  @@map("webhook_events")
+}
