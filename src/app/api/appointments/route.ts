@@ -1,26 +1,25 @@
-import { Router, Request, Response } from "express"
+import { NextRequest, NextResponse } from "next/server"
 import {
   PrismaClient,
   AppointmentStatus,
   PaymentStatus,
-  ConsultationType, 
-} from "../../../generated/prisma"
+  ConsultationType,
+} from "../../../generated/prisma" 
 
 const prisma = new PrismaClient()
-export const router = Router()
 
-// ----------------- Helpers -----------------
+// helpers de horário
 function toMinutes(hhmm: string): number {
   const [hh, mm] = hhmm.split(":").map(Number)
   return hh * 60 + mm
 }
 
-// colisão correta entre [aStart,aEnd) e [bStart,bEnd) evitando as
+// checa colisão
 function overlap(aStart: number, aEnd: number, bStart: number, bEnd: number) {
   return aStart < bEnd && aEnd > bStart
 }
 
-// (opcional) caso queiramos usar por esse metodo ou nao 
+// (opcional)
 function isSameDay(d1: Date, d2: Date) {
   return (
     d1.getUTCFullYear() === d2.getUTCFullYear() &&
@@ -28,10 +27,9 @@ function isSameDay(d1: Date, d2: Date) {
     d1.getUTCDate() === d2.getUTCDate()
   )
 }
-
-// checa se o dia da semana está habilitado nas BusinessHours
+// checa se o dia está habilitado no BusinessHours
 function isDayEnabled(bh: any, date: Date) {
-  const wd = date.getUTCDay() 
+  const wd = date.getUTCDay()
   const map: Record<number, boolean> = {
     0: bh.sundayEnabled,
     1: bh.mondayEnabled,
@@ -43,14 +41,14 @@ function isDayEnabled(bh: any, date: Date) {
   }
   return !!map[wd]
 }
-
+// busca BusinessHours ou lança
 async function getBusinessHoursOrThrow() {
   const bh = await prisma.businessHours.findFirst()
   if (!bh) throw new Error("BusinessHours não configurado")
   return bh
 }
 
-// Troque por chamada real à SDK/API do MP (retorne sandbox_init_point/init_point reais)
+// mock Mercado Pago (trocar por SDK/API real depois)
 async function createMercadoPagoPreference(input: {
   appointmentId: string
   amount: number
@@ -66,46 +64,47 @@ async function createMercadoPagoPreference(input: {
   }
 }
 
-// ----------------- Tipagem do req.user -----------------
-type ReqUser = { id: string }
-declare global {
-  namespace Express {
-    interface Request {
-      user?: ReqUser
-    }
-  }
+/* auth placeholder: trocar pelo clerk  */
+async function getAuthUser(req: NextRequest): Promise<{ id: string } | null> {
+  // exemplo: recuperar de header "x-user-id" (apenas placeholder)
+  const headerId = req.headers.get("x-user-id")
+  return headerId ? { id: headerId } : null
 }
 
-// ----------------- Rota: POST /api/appointments -----------------
-router.post("/api/appointments", async (req: Request, res: Response) => {
+// ----------------- POST /api/appointments -----------------
+export async function POST(req: NextRequest) {
   try {
+    const user = await getAuthUser(req)
+    if (!user?.id) {
+      return NextResponse.json({ error: "unauthorized" }, { status: 401 })
+    }
+
+    const body = await req.json().catch(() => ({} as any))
     const {
       // dados do agendamento
       date,
       startTime,
       endTime,
-      type, 
+      type,
       patientName,
       patientEmail,
       patientPhone,
       notes,
       // pagamento
-      amount,        
+      amount,
       currency,
       description,
       successUrl,
       pendingUrl,
       failureUrl,
-    } = req.body ?? {}
+    } = body ?? {}
 
-    // --- Auth ---
-    if (!req.user?.id) return res.status(401).json({ error: "unauthorized" })
-
-    // --- Validação básica ---
+    // validação básica
     if (!date || !startTime || !endTime || !patientName) {
-      return res
-        .status(400)
-        .json({ error: "Campos obrigatórios: date, startTime, endTime, patientName" })
+      return NextResponse.json(
+        { error: "Campos obrigatórios: date, startTime, endTime, patientName" },
+        { status: 400 }
+      )
     }
     if (
       typeof startTime !== "string" ||
@@ -113,57 +112,88 @@ router.post("/api/appointments", async (req: Request, res: Response) => {
       !startTime.includes(":") ||
       !endTime.includes(":")
     ) {
-      return res.status(400).json({ error: "startTime/endTime devem ser strings 'HH:MM'" })
+      return NextResponse.json(
+        { error: "startTime/endTime devem ser strings 'HH:MM'" },
+        { status: 400 }
+      )
     }
 
     const dateObj = new Date(date)
-    if (isNaN(dateObj.getTime())) return res.status(400).json({ error: "data inválida" })
+    if (isNaN(dateObj.getTime())) {
+      return NextResponse.json({ error: "data inválida" }, { status: 400 })
+    }
 
     const startMin = toMinutes(startTime)
     const endMin = toMinutes(endTime)
     if (!(endMin > startMin)) {
-      return res.status(400).json({ error: "intervalo de horário inválido" })
+      return NextResponse.json({ error: "intervalo de horário inválido" }, { status: 400 })
     }
 
-    // --- BusinessHours ---
+    // BusinessHours
     const bh = await getBusinessHoursOrThrow()
-
     if (!isDayEnabled(bh, dateObj)) {
-      return res.status(409).json({ error: "dia indisponível segundo BusinessHours" })
+      return NextResponse.json(
+        { error: "dia indisponível segundo BusinessHours" },
+        { status: 409 }
+      )
     }
 
-    const bhStart = toMinutes(bh.startTime) 
-    const bhEnd = toMinutes(bh.endTime)     
+    const bhStart = toMinutes(bh.startTime)
+    const bhEnd = toMinutes(bh.endTime)
     if (startMin < bhStart || endMin > bhEnd) {
-      return res.status(409).json({ error: "fora do horário de funcionamento" })
+      return NextResponse.json({ error: "fora do horário de funcionamento" }, { status: 409 })
     }
 
     if (bh.lunchBreakEnabled && bh.lunchStartTime && bh.lunchEndTime) {
       const lStart = toMinutes(bh.lunchStartTime)
       const lEnd = toMinutes(bh.lunchEndTime)
       if (overlap(startMin, endMin, lStart, lEnd)) {
-        return res.status(409).json({ error: "intervalo colide com horário de almoço" })
+        return NextResponse.json(
+          { error: "intervalo colide com horário de almoço" },
+          { status: 409 }
+        )
       }
     }
 
-    const expected = bh.appointmentDuration ?? 30 
+    const expected = bh.appointmentDuration ?? 30
     if (endMin - startMin !== expected) {
-      return res.status(400).json({ error: "duration_mismatch", expectedMin: expected })
+      return NextResponse.json(
+        { error: "duration_mismatch", expectedMin: expected },
+        { status: 400 }
+      )
     }
 
-    // --- Disponibilidade (agenda global) ---
+    // disponibilidade do dia
     const sameDayStart = new Date(
-      Date.UTC(dateObj.getUTCFullYear(), dateObj.getUTCMonth(), dateObj.getUTCDate(), 0, 0, 0)
+      Date.UTC(
+        dateObj.getUTCFullYear(),
+        dateObj.getUTCMonth(),
+        dateObj.getUTCDate(),
+        0,
+        0,
+        0
+      )
     )
     const sameDayEnd = new Date(
-      Date.UTC(dateObj.getUTCFullYear(), dateObj.getUTCMonth(), dateObj.getUTCDate(), 23, 59, 59)
+      Date.UTC(
+        dateObj.getUTCFullYear(),
+        dateObj.getUTCMonth(),
+        dateObj.getUTCDate(),
+        23,
+        59,
+        59
+      )
     )
 
     const dayAppointments = await prisma.appointment.findMany({
       where: {
         date: { gte: sameDayStart, lte: sameDayEnd },
         status: {
-          in: [AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED, AppointmentStatus.COMPLETED],
+          in: [
+            AppointmentStatus.PENDING,
+            AppointmentStatus.CONFIRMED,
+            AppointmentStatus.COMPLETED,
+          ],
         },
       },
       select: { id: true, startTime: true, endTime: true },
@@ -173,26 +203,26 @@ router.post("/api/appointments", async (req: Request, res: Response) => {
       overlap(startMin, endMin, toMinutes(a.startTime), toMinutes(a.endTime))
     )
     if (hasCollision) {
-      return res.status(409).json({ error: "time_unavailable" })
+      return NextResponse.json({ error: "time_unavailable" }, { status: 409 })
     }
 
-    // --- Validação do tipo (ConsultationType) ---
+    // tipo de consulta
     let typeValue: ConsultationType = ConsultationType.GENERAL
     if (typeof type === "string") {
       const allowed = Object.values(ConsultationType)
       if (allowed.includes(type as ConsultationType)) {
         typeValue = type as ConsultationType
-      } // se vier inválido, mantém GENERAL
+      }
     }
 
-    // --- Cria Appointment (PENDING) ---
+    // cria appointment (PENDING)
     const appointment = await prisma.appointment.create({
       data: {
-        userId: req.user.id,
-        date: dateObj, 
+        userId: user.id,
+        date: dateObj,
         startTime,
         endTime,
-        type: typeValue, 
+        type: typeValue,
         status: AppointmentStatus.PENDING,
         patientName,
         patientEmail,
@@ -201,7 +231,7 @@ router.post("/api/appointments", async (req: Request, res: Response) => {
       },
     })
 
-    // --- amount pode vir como string; normalizar para number ---
+    // amount pode vir string → normaliza
     const normalizedAmount =
       typeof amount === "number"
         ? amount
@@ -209,14 +239,14 @@ router.post("/api/appointments", async (req: Request, res: Response) => {
         ? Number(amount)
         : NaN
 
-    // --- Validação mínima do pagamento ---
     if (!Number.isFinite(normalizedAmount) || !description) {
-      return res
-        .status(400)
-        .json({ error: "amount (número) e description são obrigatórios para o pagamento" })
+      return NextResponse.json(
+        { error: "amount (número) e description são obrigatórios para o pagamento" },
+        { status: 400 }
+      )
     }
 
-    // --- Cria preferência (mock) e Payment (PENDING) ---
+    // cria preferência (mock) e payment (PENDING)
     const pref = await createMercadoPagoPreference({
       appointmentId: appointment.id,
       amount: normalizedAmount,
@@ -229,7 +259,7 @@ router.post("/api/appointments", async (req: Request, res: Response) => {
     const payment = await prisma.payment.create({
       data: {
         appointmentId: appointment.id,
-        amount: normalizedAmount,        
+        amount: normalizedAmount,
         currency: currency ?? "BRL",
         description,
         status: PaymentStatus.PENDING,
@@ -244,23 +274,26 @@ router.post("/api/appointments", async (req: Request, res: Response) => {
       },
     })
 
-    // --- Resposta ---
-    return res.status(201).json({
-      appointment,
-      payment: {
-        id: payment.id,
-        status: payment.status,
-        amount: payment.amount,          
-        currency: payment.currency,
-        preferenceId: payment.preferenceId,
-        init_point: pref.init_point,     // troque pelo real quando integrar o MP
+    // resposta
+    return NextResponse.json(
+      {
+        appointment,
+        payment: {
+          id: payment.id,
+          status: payment.status,
+          amount: payment.amount,
+          currency: payment.currency,
+          preferenceId: payment.preferenceId,
+          init_point: pref.init_point, // trocar por real quando integrar o MP
+        },
       },
-    })
+      { status: 201 }
+    )
   } catch (e: any) {
     console.error(e)
     if (String(e?.message || "").includes("BusinessHours")) {
-      return res.status(500).json({ error: "BusinessHours não configurado" })
+      return NextResponse.json({ error: "BusinessHours não configurado" }, { status: 500 })
     }
-    return res.status(500).json({ error: "internal_error" })
+    return NextResponse.json({ error: "internal_error" }, { status: 500 })
   }
-})
+}
