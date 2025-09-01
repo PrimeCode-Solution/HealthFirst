@@ -20,6 +20,12 @@ enum UserRole {
   USER
 }
 
+// Enum para status de categoria
+enum CategoryStatus {
+  ACTIVE
+  INACTIVE
+}
+
 // Enum para status do agendamento
 enum AppointmentStatus {
   PENDING     // Aguardando pagamento
@@ -68,9 +74,82 @@ model User {
   // Relações
   appointments   Appointment[]
   subscription   Subscription?
-  ebooks         UserEbook[]
+  ebookAccess    UserEbookAccess[]
   
   @@map("users")
+}
+
+// Model para categorias de ebooks
+model EbookCategory {
+  id          String         @id @default(cuid())
+  name        String         @unique
+  description String?
+  status      CategoryStatus @default(ACTIVE)
+  
+  // Timestamps
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  
+  // Relações
+  ebooks      Ebook[]
+  
+  @@map("ebook_categories")
+}
+
+// Model para ebooks
+model Ebook {
+  id              String        @id @default(cuid())
+  title           String
+  description     String?
+  author          String
+  coverImage      String?       // URL da imagem de capa
+  fileUrl         String        // URL do arquivo PDF/EPUB
+  isPremium       Boolean       @default(false)
+  price           Decimal?      @db.Decimal(10,2)
+  categoryId      String
+  
+  // Metadados do arquivo
+  fileSize        Int?          // Tamanho em bytes
+  fileType        String        // "pdf", "epub", "mobi"
+  
+  // Configurações
+  isActive        Boolean       @default(true)
+  downloadCount   Int           @default(0)
+  viewCount       Int           @default(0)
+  
+  // Timestamps
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  // Relações
+  category        EbookCategory @relation(fields: [categoryId], references: [id])
+  userAccess      UserEbookAccess[]
+  
+  @@map("ebooks")
+}
+
+// Model para controle de acesso aos ebooks
+model UserEbookAccess {
+  id            String   @id @default(cuid())
+  userId        String
+  ebookId       String
+  
+  // Controle de acesso
+  downloadCount Int      @default(0)
+  lastDownload  DateTime?
+  
+  // Timestamps
+  firstAccess   DateTime @default(now())
+  lastAccess    DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  // Relações
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ebook         Ebook    @relation(fields: [ebookId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, ebookId])
+  @@map("user_ebook_access")
 }
 
 // Model para configurações de horários
@@ -210,52 +289,6 @@ model EbookCategory {
   ebooks      Ebook[]
   
   @@map("ebook_categories")
-}
-
-// Model para ebooks
-model Ebook {
-  id              String        @id @default(cuid())
-  title           String
-  description     String?
-  categoryId      String
-  
-  // Arquivos
-  coverImage      String?       // URL da imagem de capa
-  filePath        String        // Caminho do arquivo PDF/EPUB/MOBI
-  fileSize        Int?          // Tamanho do arquivo em bytes
-  fileType        String        // "pdf", "epub", "mobi"
-  
-  // Configurações
-  isPremium       Boolean       @default(false) // Se é premium (só para assinantes)
-  isActive        Boolean       @default(true)
-  
-  // Timestamps
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  
-  // Relações
-  category        EbookCategory @relation(fields: [categoryId], references: [id])
-  userEbooks      UserEbook[]
-  
-  @@map("ebooks")
-}
-
-// Model para relacionar usuários com ebooks (downloads/acesso)
-model UserEbook {
-  id         String   @id @default(cuid())
-  userId     String
-  ebookId    String
-  
-  // Timestamps
-  accessedAt DateTime @default(now())
-  createdAt  DateTime @default(now())
-  
-  // Relações
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  ebook      Ebook    @relation(fields: [ebookId], references: [id], onDelete: Cascade)
-  
-  @@unique([userId, ebookId])
-  @@map("user_ebooks")
 }
 
 // Model para webhooks do Mercado Pago
