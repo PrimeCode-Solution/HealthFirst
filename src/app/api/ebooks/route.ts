@@ -113,7 +113,7 @@ export async function POST(request: NextRequest) {
       categoryId: formData.get("categoryId") as string,
       isPremium: formData.get("isPremium") === "true",
       price: formData.get("price") ? parseFloat(formData.get("price") as string) : undefined,
-      fileType: "pdf" as const // Simplificado para demo
+      fileType: ebookFile.type || validatedData.fileType // Extrair tipo do arquivo ou usar o validado
     };
 
     const validatedData = createEbookSchema.parse(ebookData);
@@ -146,11 +146,18 @@ export async function POST(request: NextRequest) {
     }
 
     // Criar ebook
+    // Helper function to sanitize filenames
+    function sanitizeFilename(filename: string): string {
+      return filename
+        .replace(/[^a-zA-Z0-9.\-_]/g, "_") // Replace special characters with underscores
+        .substring(0, 100); // Limit length to 100 characters
+    }
+
     const ebook = await prisma.ebook.create({
       data: {
         ...validatedData,
         coverImage: coverFile ? `/uploads/covers/${Date.now()}-${coverFile.name}` : null,
-        fileUrl: `/uploads/ebooks/${Date.now()}-${ebookFile.name}`,
+        fileUrl: `/uploads/ebooks/${Date.now()}-${sanitizeFilename(ebookFile.name)}`,
         fileSize: ebookFile.size,
         fileType: validatedData.fileType
       },

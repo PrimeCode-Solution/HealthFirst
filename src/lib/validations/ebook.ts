@@ -3,7 +3,6 @@ import { z } from "zod";
 // Schema para criação de categoria
 export const createCategorySchema = z.object({
   name: z.string()
-    .min(1, "Nome é obrigatório")
     .min(2, "Nome deve ter pelo menos 2 caracteres")
     .max(100, "Nome deve ter no máximo 100 caracteres"),
   description: z.string()
@@ -19,7 +18,6 @@ export const createEbookSchema = z.object({
   title: z.string()
     .min(1, "Título é obrigatório")
     .min(3, "Título deve ter pelo menos 3 caracteres")
-    .max(200, "Título deve ter no máximo 200 caracteres"),
   description: z.string()
     .max(1000, "Descrição deve ter no máximo 1000 caracteres")
     .optional(),
@@ -28,8 +26,8 @@ export const createEbookSchema = z.object({
     .min(2, "Nome do autor deve ter pelo menos 2 caracteres")
     .max(100, "Nome do autor deve ter no máximo 100 caracteres"),
   categoryId: z.string()
-    .min(1, "Categoria é obrigatória"),
-  isPremium: z.boolean().default(false),
+  categoryId: z.string()
+    .min(2, "Categoria deve ter pelo menos 2 caracteres"),
   price: z.number()
     .min(0, "Preço deve ser maior ou igual a 0")
     .max(9999.99, "Preço deve ser menor que R$ 10.000")
