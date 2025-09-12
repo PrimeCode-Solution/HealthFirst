@@ -1,64 +1,82 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createHmac } from "crypto";
+import { PrismaClient } from "@/generated/prisma";
+import jwt, { JwtPayload } from "jsonwebtoken";
 
-const SECRET = process.env.APP_SECRET || "secret";
+const prisma = new PrismaClient();
+const JWT_SECRET = "exemplinho" //aqui da pra pegar do .env()
 
-function verifyToken(token: string) {
-  const [payload, signature] = token.split(".");
-  const hmac = createHmac("sha256", SECRET);
-  hmac.update(payload);
-  const expected = hmac.digest("hex");
-
-  if (signature !== expected) {
-    return null;
+function validateToken(token: string) {
+  try{
+    const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;
+    return { valid: true, expired: false, decoded}
+  } catch (err: any){
+    return {
+      valid: false,
+      expired: err.name === "TokenExpiredError",
+      decoded: null
+    }
   }
-  return JSON.parse(payload);
-}
-
-function changeSettings(bodyRequest: object) {
-  /* -> HERE CHANGUE SETTINGS<- */
 }
 
 export async function GET() {
   try {
-    const config = {
-      /* -> CONFIGURATIONS OBJECT <- */
-    };
-    return NextResponse.json(config, { status: 200 });
-  } catch (err) {
-    console.log(`GET error -> ${err}`);
-    return NextResponse.json({ error: "Erro interno" }, { status: 400 });
+    const configurations = await prisma.businessHours.findFirst();
+    if(!configurations){
+        return NextResponse.json(
+            {error: "Não foi encontrada configuração"},
+            {status: 404}
+        )}
+        
+    return NextResponse.json(configurations, {status: 200})
+
+  } catch (err){
+    console.error(`ERROR in GET/business-hours: ${err}`)
+    return NextResponse.json(
+      {error: "Internal Error"},
+      {status: 404}
+    )
   }
 }
 
 export async function PUT(request: NextRequest) {
-  try {
+  try{
     const authHeader = request.headers.get("authorization");
-    if (!authHeader) {
+    if(!authHeader){
       return NextResponse.json(
         { error: "Token not provided" },
-        { status: 401 },
-      );
-    }
-    const token = authHeader.split(" ")[1];
-    const decoded = verifyToken(token);
-
-    if (!decoded) {
-      return NextResponse.json({ error: "Invalid token" }, { status: 403 });
-    }
-    if (decoded.role !== "admin") {
-      return NextResponse.json({ error: "Only for Admins" }, { status: 403 });
+        { status: 401 }
+      )
     }
 
-    const bodyRequest = await request.json();
-    changeSettings(bodyRequest);
+    const jwtToken = authHeader.split(" ")[1];
+    const result = validateToken(jwtToken);
 
+    if(!result.valid){
+      if(result.expired){
+        return NextResponse.json(
+        { error: "Expired Token" },
+        { status: 401 }
+      )
+      }
+      return NextResponse.json(
+        { error: "Invalid Token" },
+        { status: 401 }
+      )
+    }
+
+    const body = await request.json()
+    const updated = await prisma.businessHours.upsert({
+      where: {id: body.id || ""},
+      update: { ...body },
+      create: { ...body}
+    });
+
+    return NextResponse.json(updated, { status: 200 });
+  }catch (err){
+    console.error(`ERROR in PUT/business-hours: ${err}`);
     return NextResponse.json(
-      { message: "Horários atualizados com sucesso" },
-      { status: 200 },
-    );
-  } catch (err) {
-    console.error(`PUT error -> ${err}`);
-    return NextResponse.json({ error: "Erro interno" }, { status: 400 });
+      {error: "Internal Error"},
+      {status: 500}
+    )
   }
 }
