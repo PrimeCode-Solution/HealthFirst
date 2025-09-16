@@ -10,11 +10,11 @@ import { cn } from "@/lib/utils"
 import Image from "next/image"
 
 const navigationItems = [
-  { title: "Consultas", href: "/consultas" },
-  { title: "Recursos", href: "/recursos" },
-  { title: "Serviços", href: "/servicos" },
-  { title: "Sobre nós", href: "/sobre" },
-  { title: "Contato", href: "/contato" },
+  { title: "Introdução Alimentar", href: "/introducao-alimentar" },
+  { title: "Consulta Pediatrica", href: "/consulta-pediatrica" },
+  { title: "Consulta Geral", href: "/consulta-geral" },
+  { title: "Consulta Nutricional", href: "/consulta-nutricional" },
+  { title: "Agendamento", href: "/agendar-consulta" },
 ]
 
 export function Header() {
