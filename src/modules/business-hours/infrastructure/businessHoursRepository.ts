@@ -6,6 +6,18 @@ import type {
 import { BusinessHoursRepository } from "../domain/businessHoursRepository";
 import api from "@/lib/api";
 
+// Exporta o repositório
+export function createBusinessHoursRepository(): BusinessHoursRepository {
+  return {
+    create,
+    findAll,
+    findById,
+    update,
+    delete: deleteCategory,
+    getAvailableSlots,
+  };
+}
+
 // Criação do registro
 async function create(data: CreateBusinessHoursDTO): Promise<BusinessHours> {
   const response = await api.post<BusinessHours>("/business-hours", data);
@@ -51,22 +63,10 @@ async function deleteCategory(id: BusinessHours["id"]): Promise<boolean> {
 // Busca slots disponíveis para uma data específica
 async function getAvailableSlots(
   id: BusinessHours["id"],
-  date: Date
+  date: Date,
 ): Promise<string[]> {
   const response = await api.get<string[]>(
-    `/business-hours/${id}/available-slots?date=${date.toISOString().slice(0, 10)}`
+    `/business-hours/${id}/available-slots?date=${date.toISOString().slice(0, 10)}`,
   );
   return response.data;
-}
-
-// Exporta o repositório
-export function createBusinessHoursRepository(): BusinessHoursRepository {
-  return {
-    create,
-    findAll,
-    findById,
-    update,
-    delete: deleteCategory,
-    getAvailableSlots,
-  };
 }
