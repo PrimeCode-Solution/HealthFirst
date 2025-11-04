@@ -1,38 +1,46 @@
-// AQUI BASICAMENTE VAMO SUBSTITUIR A CHAMADA DO PRISMA PELO app/api COM AXIOS
-import axios from 'axios'
+import api from '@/lib/api';
 import type { Appointment, CreateAppointmentDTO, UpdateAppointmentStatusDTO } from "../domain/appointment.interface";
-import type { AppointmentRepositoryDomain } from "../domain/appointments.repository";
+import type { AppointmentRepositoryDomain } from "../domain/appointmentsRepository";
 
 
-export class AppointmentRepository implements AppointmentRepositoryDomain {
-    async findAll(): Promise<Appointment> {
-        const response = await axios.get('/api/appointments')
+export function AppointmentRepository(): AppointmentRepositoryDomain {
+    return {
+        findAll,
+        findById,
+        findByUser,
+        create,
+        update,
+        delete: deleteAppointment,
+    }
+
+    async function findAll(): Promise<Appointment[]> {
+        const response = await api.get('/appointments')
         return response.data
     }
 
-    async findById(id: string): Promise<Appointment> {
-        const response = await axios.get(`/api/appointments/${id}`);
+    async function findById(id: string): Promise<Appointment> {
+        const response = await api.get(`/appointments/${id}`);
         return response.data
     }
 
-    async findByUser(userId: string): Promise<Appointment> {
-        const response = await axios.get(`/api/appointments/user/${userId}`);
+    async function findByUser(userId: string): Promise<Appointment[]> {
+        const response = await api.get(`/appointments/user/${userId}`);
         return response.data
     }
 
-    async create(data: CreateAppointmentDTO): Promise<Appointment> {
-        const response = await axios.post(`/api/appointments`, data)
+    async function create(data: CreateAppointmentDTO): Promise<Appointment> {
+        const response = await api.post(`/appointments`, data)
         return response.data
     }
 
-    async update(data: UpdateAppointmentStatusDTO): Promise<Appointment> {
+    async function update(data: UpdateAppointmentStatusDTO): Promise<Appointment> {
         const { id, status } = data
-        const response = await axios.put(`/api/appointments/${id}`, status)
+        const response = await api.put(`/appointments/${id}`, { status })
         return response.data
     }
 
-    async delete(id: string): Promise<Appointment> {
-        const response = await axios.delete(`/api/appointments/${id}`);
+    async function deleteAppointment(id: string): Promise<Appointment> {
+        const response = await api.delete(`/appointments/${id}`);
         return response.data
     }
 }
