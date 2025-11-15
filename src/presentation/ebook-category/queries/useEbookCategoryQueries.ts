@@ -1,19 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
-import { createEbookCategoryRepository } from "@/modules/ebook-category/infrastructure/ebookCategoryRepository";
+import { ebookCategoryService } from "../services/ebookCategoryService";
 
-const ebookCategoryRepository = createEbookCategoryRepository();
+export const EBOOK_CATEGORY_QUERY_KEYS = {
+  all: ["ebook-categories"] as const,
+  list: () => [...EBOOK_CATEGORY_QUERY_KEYS.all, "list"] as const,
+};
 
-export function useEbookCategories() {
+export const useGetEbookCategories = () => {
   return useQuery({
-    queryKey: ["ebookCategories"],
-    queryFn: () => ebookCategoryRepository.findAll(),
+    queryKey: EBOOK_CATEGORY_QUERY_KEYS.list(),
+    queryFn: ebookCategoryService.getCategories,
   });
-}
-
-export function useEbookCategoryById(id: string) {
-  return useQuery({
-    queryKey: ["ebookCategory", id],
-    queryFn: () => ebookCategoryRepository.findById(id),
-    enabled: !!id,
-  });
-}
+};
