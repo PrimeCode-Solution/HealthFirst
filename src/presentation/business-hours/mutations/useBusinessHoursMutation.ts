@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import type {
     UpdateBusinessHoursDTO,
     BusinessHours,
+    CreateBusinessHoursDTO,
 } from "@/modules/business-hours/domain/businessHours.interface";
 import { AxiosError } from "axios";
 
@@ -18,6 +19,28 @@ type DaysOfWeekField =
     | "fridayEnabled"
     | "saturdayEnabled"
     | "sundayEnabled";
+
+    export function useCreateBussinesHours() {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+    mutationFn: ({
+        
+        data,
+    }: {
+        
+        data: CreateBusinessHoursDTO;
+    }) => businessHoursRepository.create(data),
+    onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ["CreatebusinessHours"] });
+        toast.success("Agendamento criado com sucesso!");
+    },
+    onError: (error: AxiosError) => {
+        console.error("Erro ao criar horário:", error);
+        toast.error(error.message || "Erro ao criar horário");
+    },
+    });
+}
 
 // Hook para atualizar horário de funcionamento
 export function useUpdateBusinessHours() {
