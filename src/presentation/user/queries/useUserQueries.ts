@@ -1,17 +1,47 @@
 import { useQuery } from "@tanstack/react-query";
 import { createUserRepository } from "@/modules/user/infrastructure/userRepository";
+import { userService } from "../services/userService";
 
-const userRepository = createUserRepository();
-
-// Query para verificar se usuário tem acesso premium
-export const usePremiumAccess = (userId: string) => {
-  return useQuery({
-    queryKey: ["user", userId, "premium-access"],
-    queryFn: () => userRepository.hasAccessToPremiumContent(userId),
-    enabled: !!userId, // Só executa se tiver userId
-    staleTime: 2 * 60 * 1000, // 2 minutos (pode ser menos já que consulta no MP)
-    retry: 2, // Retry em caso de erro (API externa pode falhar)
-  });
+export const USER_QUERY_KEYS = {
+  all: ["users"] as const,
+  lists: () => [...USER_QUERY_KEYS.all, "list"] as const,
+  details: () => [...USER_QUERY_KEYS.all, "detail"] as const,
+  detail: (id: string) => [...USER_QUERY_KEYS.details(), id] as const,
+  premium: (id: string) =>
+    [...USER_QUERY_KEYS.detail(id), "premium-access"] as const,
 };
 
+export const useUserQueries = () => {
+  const userRepository = createUserRepository();
 
+  const usePremiumAccess = (userId: string) => {
+    return useQuery({
+      queryKey: USER_QUERY_KEYS.premium(userId),
+      queryFn: () => userRepository.hasAccessToPremiumContent(userId),
+      enabled: !!userId,
+      staleTime: 2 * 60 * 1000,
+      retry: 2,
+    });
+  };
+
+  const useListUsers = () => {
+    return useQuery({
+      queryKey: USER_QUERY_KEYS.lists(),
+      queryFn: userService.listUsers,
+    });
+  };
+
+  const useGetUserById = (userId: string) => {
+    return useQuery({
+      queryKey: USER_QUERY_KEYS.detail(userId),
+      queryFn: () => userService.getUserById(userId),
+      enabled: !!userId,
+    });
+  };
+
+  return {
+    usePremiumAccess,
+    useListUsers,
+    useGetUserById,
+  };
+};
