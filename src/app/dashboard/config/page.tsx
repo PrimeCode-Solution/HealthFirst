@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Clock, Save } from "lucide-react";
-import { useBusinessHoursForm } from "@/presentation/business-hours/create/useBusinessHoursForm";
+import { useBusinessHoursForm } from "@/presentation/business-hours/create/CreateBusinessHoursForm";
 import { useCreateBussinesHours } from "@/presentation/business-hours/mutations/useBusinessHoursMutation";
 import { CreateBusinessHoursDTO } from "@/modules/business-hours/domain/businessHours.interface";
 
