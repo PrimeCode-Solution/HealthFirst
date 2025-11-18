@@ -4,9 +4,12 @@ import React from "react";
 import { AppSidebar } from "@/components/app-sidebar";
 import { DashboardHeader } from "@/components/dashboard-header";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { queryClient } from "@/lib/react-query";
 
 export default function Provider({ children }: { children: React.ReactNode }) {
   return (
+    <QueryClientProvider client={queryClient}> 
     <SidebarProvider
       style={
         {
@@ -27,5 +30,6 @@ export default function Provider({ children }: { children: React.ReactNode }) {
         </div>
       </SidebarInset>
     </SidebarProvider>
+    </QueryClientProvider>
   );
 }

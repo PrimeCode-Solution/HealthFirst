@@ -1,174 +1,37 @@
 "use client";
 
 import React from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import {
-  parse,
-  isAfter,
-  format,
-  addDays,
-  addMinutes,
-  isBefore,
-  isWithinInterval,
-} from "date-fns";
+import { Controller } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Clock, Save } from "lucide-react";
-
-// Função auxiliar para converter string de hora em Date
-const parseTimeString = (timeString: string): Date => {
-  try {
-    return parse(timeString, "HH:mm", new Date());
-  } catch (error) {
-    console.error("Erro ao parsear horário:", timeString, error);
-    return new Date();
-  }
-};
-
-// Schema com validações mais complexas para testar
-const configSchema = z
-  .object({
-    startTime: z.string().min(1, "Horário é obrigatório"),
-    endTime: z.string().min(1, "Horário é obrigatório"),
-    lunchStart: z.string().min(1, "Início do almoço é obrigatório"),
-    lunchEnd: z.string().min(1, "Fim do almoço é obrigatório"),
-    consultationDuration: z
-      .number()
-      .min(15, "Duração mínima é 15 minutos")
-      .max(120, "Duração máxima é 120 minutos"),
-    intervalBetween: z
-      .number()
-      .min(0, "Intervalo não pode ser negativo")
-      .max(60, "Intervalo máximo é 60 minutos"),
-    enableLunchBreak: z.boolean(),
-    allowWeekends: z.boolean(),
-    availableDays: z.array(z.string()).min(1, "Selecione pelo menos um dia"),
-  })
-  .refine(
-    (data) => {
-      // Validar se horário de término é após o início
-      try {
-        const start = parseTimeString(data.startTime);
-        const end = parseTimeString(data.endTime);
-        return isAfter(end, start);
-      } catch {
-        return false;
-      }
-    },
-    {
-      message: "Horário de término deve ser após o horário de início",
-      path: ["endTime"],
-    },
-  );
-
-type ConfigFormData = z.infer<typeof configSchema>;
+import { useBusinessHoursForm } from "@/presentation/business-hours/create/CreateBusinessHoursForm";
+import { useCreateBussinesHours } from "@/presentation/business-hours/mutations/useBusinessHoursMutation";
+import { CreateBusinessHoursDTO } from "@/modules/business-hours/domain/businessHours.interface";
 
 export default function Config() {
-  const form = useForm<ConfigFormData>({
-    resolver: zodResolver(configSchema),
-    defaultValues: {
-      startTime: "08:00",
-      endTime: "18:00",
-      lunchStart: "12:00",
-      lunchEnd: "13:00",
-      consultationDuration: 30,
-      intervalBetween: 15,
-      enableLunchBreak: true,
-      allowWeekends: false,
-      availableDays: ["monday", "tuesday", "wednesday", "thursday", "friday"],
-    },
-  });
+  const {
+    register,
+    control,
+    handleSubmit,
+    errors,
+    watch,
+    setValue,
+    isSubmitting,
+  } = useBusinessHoursForm();
 
-  const { setValue, watch } = form;
+  const { mutate: createBusinessHours } = useCreateBussinesHours();
 
-  const enableLunchBreak = watch("enableLunchBreak");
-  const startTime = watch("startTime");
-  const endTime = watch("endTime");
-  const lunchStart = watch("lunchStart");
-  const lunchEnd = watch("lunchEnd");
-  const consultationDuration = watch("consultationDuration");
-  const intervalBetween = watch("intervalBetween");
+  const lunchBreakEnabled = watch("lunchBreakEnabled");
 
-  const generateTimeSlots = () => {
-    try {
-      const slots: string[] = [];
-      const start = parseTimeString(startTime);
-      const end = parseTimeString(endTime);
-      const lunchStartTime = parseTimeString(lunchStart);
-      const lunchEndTime = parseTimeString(lunchEnd);
-
-      let current = start;
-
-      while (isBefore(current, end)) {
-        const slotEnd = addMinutes(current, consultationDuration);
-
-        // Verificar se está no horário de almoço
-        if (enableLunchBreak) {
-          const isInLunchTime =
-            isWithinInterval(current, {
-              start: lunchStartTime,
-              end: lunchEndTime,
-            }) ||
-            isWithinInterval(slotEnd, {
-              start: lunchStartTime,
-              end: lunchEndTime,
-            });
-
-          if (isInLunchTime) {
-            current = lunchEndTime;
-            continue;
-          }
-        }
-
-        // Verificar se cabe no horário de funcionamento
-        if (
-          isBefore(slotEnd, end) ||
-          format(slotEnd, "HH:mm") === format(end, "HH:mm")
-        ) {
-          slots.push(format(current, "HH:mm"));
-        }
-
-        current = addMinutes(current, consultationDuration + intervalBetween);
-      }
-
-      return slots;
-    } catch (error) {
-      console.error("Erro ao gerar slots:", error);
-      return [];
-    }
-  };
-
-  const handleDayToggle = (dayValue: string, checked: boolean) => {
-    const currentDays = form.getValues("availableDays");
-    if (checked) {
-      setValue("availableDays", [...currentDays, dayValue]);
-    } else {
-      setValue(
-        "availableDays",
-        currentDays.filter((day) => day !== dayValue),
-      );
-    }
-  };
-
-  const handleSubmit = (data: ConfigFormData) => {
-    console.log("Configurações:", data);
-    alert("Funcionou!");
-  };
-
+  const onSubmit = (data: CreateBusinessHoursDTO) =>{
+    createBusinessHours({data});
+    console.log(data)
+  }
+  
   return (
     <div className="p-8">
       <div className="mb-8">
@@ -176,145 +39,153 @@ export default function Config() {
         <p className="text-gray-600">Defina os horários de funcionamento</p>
       </div>
 
-      <Form {...form}>
-        <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
-          <Card className="max-w-md">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Clock className="h-5 w-5" />
-                Horários Básicos
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <FormField
-                control={form.control}
-                name="startTime"
+      <div className="space-y-6">
+        <Card className="max-w-md">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Clock className="h-5 w-5" />
+              Horários Básicos
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Horário de Início */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Horário de Início</label>
+              <Input 
+                type="time" 
+                {...register("startTime")} 
+                defaultValue="08:00"
+              />
+              {errors.startTime && (
+                <p className="text-sm text-red-500">{errors.startTime.message}</p>
+              )}
+            </div>
+
+            {/* Horário de Término */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Horário de Término</label>
+              <Input 
+                type="time" 
+                {...register("endTime")} 
+                defaultValue="18:00"
+              />
+              {errors.endTime && (
+                <p className="text-sm text-red-500">{errors.endTime.message}</p>
+              )}
+            </div>
+
+            {/* Duração da Consulta */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Duração da Consulta (min)</label>
+              <Input
+                required
+                type="number"
+                min="5"
+                max="120"
+                {...register("appointmentDuration", { valueAsNumber: true })}
+                defaultValue={30}
+              />
+              {errors.appointmentDuration && (
+                <p className="text-sm text-red-500">
+                  {errors.appointmentDuration.message}
+                </p>
+              )}
+            </div>
+
+            {/* Intervalo para Almoço */}
+            <div className="flex items-center justify-between py-2">
+              <div>
+                <label className="text-sm font-medium">Intervalo para Almoço</label>
+                <p className="text-sm text-gray-500">Bloquear horários para almoço</p>
+              </div>
+              <Controller
+                name="lunchBreakEnabled"
+                control={control}
+                defaultValue={true}
                 render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Horário de Início</FormLabel>
-                    <FormControl>
-                      <Input type="time" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
                 )}
               />
+            </div>
 
-              <FormField
-                control={form.control}
-                name="enableLunchBreak"
-                render={({ field }) => (
-                  <FormItem className="flex items-center justify-between">
-                    <div>
-                      <FormLabel>Intervalo para Almoço</FormLabel>
-                      <FormDescription>
-                        Bloquear horários para almoço
-                      </FormDescription>
-                    </div>
-                    <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="allowWeekends"
-                render={({ field }) => (
-                  <FormItem className="flex items-center justify-between">
-                    <div>
-                      <FormLabel>Permitir Fins de Semana</FormLabel>
-                    </div>
-                    <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-
-              <div className="space-y-2">
-                <FormLabel>Dias Disponíveis</FormLabel>
+            {/* Horários de Almoço (condicional) */}
+            {lunchBreakEnabled && (
+              <>
                 <div className="space-y-2">
-                  {["monday", "tuesday", "wednesday", "thursday", "friday"].map(
-                    (day) => (
-                      <FormField
-                        key={day}
-                        control={form.control}
-                        name="availableDays"
-                        render={({ field }) => (
-                          <FormItem className="flex flex-row items-start space-y-0 space-x-3">
-                            <FormControl>
-                              <Checkbox
-                                checked={field.value?.includes(day)}
-                                onCheckedChange={(checked) => {
-                                  handleDayToggle(day, checked as boolean);
-                                }}
-                              />
-                            </FormControl>
-                            <FormLabel className="text-sm font-normal">
-                              {day === "monday" && "Segunda-feira"}
-                              {day === "tuesday" && "Terça-feira"}
-                              {day === "wednesday" && "Quarta-feira"}
-                              {day === "thursday" && "Quinta-feira"}
-                              {day === "friday" && "Sexta-feira"}
-                            </FormLabel>
-                          </FormItem>
-                        )}
-                      />
-                    ),
+                  <label className="text-sm font-medium">Início do Almoço</label>
+                  <Input 
+                    type="time" 
+                    {...register("lunchStartTime")} 
+                    defaultValue="12:00"
+                  />
+                  {errors.lunchStartTime && (
+                    <p className="text-sm text-red-500">
+                      {errors.lunchStartTime.message}
+                    </p>
                   )}
                 </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Fim do Almoço</label>
+                  <Input 
+                    type="time" 
+                    {...register("lunchEndTime")} 
+                    defaultValue="13:00"
+                  />
+                  {errors.lunchEndTime && (
+                    <p className="text-sm text-red-500">
+                      {errors.lunchEndTime.message}
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
+
+            {/* Dias Disponíveis */}
+            <div className="space-y-3 pt-4">
+              <label className="text-sm font-medium">Dias Disponíveis</label>
+              <div className="space-y-2">
+                {[
+                  { name: "mondayEnabled", label: "Segunda-feira", defaultValue: true },
+                  { name: "tuesdayEnabled", label: "Terça-feira", defaultValue: true },
+                  { name: "wednesdayEnabled", label: "Quarta-feira", defaultValue: true },
+                  { name: "thursdayEnabled", label: "Quinta-feira", defaultValue: true },
+                  { name: "fridayEnabled", label: "Sexta-feira", defaultValue: true },
+                  { name: "saturdayEnabled", label: "Sábado", defaultValue: false },
+                  { name: "sundayEnabled", label: "Domingo", defaultValue: false },
+                ].map((day) => (
+                  <div key={day.name} className="flex items-center space-x-3">
+                    <Controller
+                      name={day.name as any}
+                      control={control}
+                      defaultValue={day.defaultValue}
+                      render={({ field }) => (
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      )}
+                    />
+                    <label className="text-sm font-normal">{day.label}</label>
+                  </div>
+                ))}
               </div>
+            </div>
+          </CardContent>
+        </Card>
 
-              <FormField
-                control={form.control}
-                name="endTime"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Horário de Término</FormLabel>
-                    <FormControl>
-                      <Input type="time" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="consultationDuration"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Duração da Consulta (min)</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        min="15"
-                        max="120"
-                        {...field}
-                        onChange={(e) => field.onChange(Number(e.target.value))}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </CardContent>
-          </Card>
-
-          <Button type="submit" className="flex items-center gap-2">
-            <Save className="h-4 w-4" />
-            Salvar
-          </Button>
-        </form>
-      </Form>
+        <Button 
+          onClick={handleSubmit(onSubmit)}
+          className="flex items-center gap-2"
+          disabled={isSubmitting}
+        >
+          <Save className="h-4 w-4" />
+          {isSubmitting ? "Salvando..." : "Salvar"}
+        </Button>
+      </div>
     </div>
   );
 }

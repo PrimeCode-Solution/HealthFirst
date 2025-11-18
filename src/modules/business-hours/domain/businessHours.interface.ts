@@ -20,16 +20,16 @@ export interface CreateBusinessHoursDTO{
     endTime: string;
     lunchStartTime?: string;
     lunchEndTime?: string;
-    lunchBreakEnabled: boolean;
+    lunchBreakEnabled?: boolean;
 
     //Dias da semana validos 
-    mondayEnabled: boolean;
-    tuesdayEnabled: boolean;
-    wednesdayEnabled: boolean;
-    thursdayEnabled: boolean;
-    fridayEnabled: boolean;
-    saturdayEnabled: boolean;
-    sundayEnabled: boolean;
+    mondayEnabled?: boolean;
+    tuesdayEnabled?: boolean;
+    wednesdayEnabled?: boolean;
+    thursdayEnabled?: boolean;
+    fridayEnabled?: boolean;
+    saturdayEnabled?: boolean;
+    sundayEnabled?: boolean;
     appointmentDuration: number;
 }
 

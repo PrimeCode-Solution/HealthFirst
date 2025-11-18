@@ -25,7 +25,7 @@ export const BusinessHoursSchema = z.object({
     .min(5, "Duração mínima de 5 minutos"),
 });
 //Hook principal do formulário de business hours
-export const useBusinessHoursForm = (
+export const useUpdateBusinessHoursForm = (
     defaultValues?: Partial<CreateBusinessHoursDTO>
 ) => {
     const {
