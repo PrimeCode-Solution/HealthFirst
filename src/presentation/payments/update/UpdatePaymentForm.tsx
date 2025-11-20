@@ -1,7 +1,7 @@
-import { useForm } from 'react-hook-form';
+import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import {  useUpdatePaymentMutation } from '@/presentation/payments/api/useUpdatePaymentMutation';
+import {  useUpdatePaymentMutation } from "@/presentation/payments/api/useUpdatePaymentMutation";
 import { usePaymentById } from "@/presentation/payments/queries/usePaymentsQueries";
 import { usePaymentMethods } from "@/presentation/payments/queries/usePaymentMethods";
 
