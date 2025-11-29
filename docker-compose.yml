@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  app:
+    container_name: healthfirst-app
+    build:
+      context: .
+      dockerfile: Dockerfile
+      network: host
+    restart: always
+    ports:
+      - "3000:3000"
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    environment:
+      - DATABASE_URL=postgresql://postgres:password@db:5432/healthfirst
+      - NODE_ENV=production
+    depends_on:
+      - db
+    networks:
+      - healthfirst-network
+
+  db:
+    container_name: healthfirst-db
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: healthfirst
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - healthfirst-network
+
+volumes:
+  postgres_data:
+
+networks:
+  healthfirst-network:
+    driver: bridge

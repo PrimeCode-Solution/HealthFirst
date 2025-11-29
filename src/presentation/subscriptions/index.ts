@@ -1,7 +1,12 @@
-export {useCreateSubscription} from "./mutations/useSubscriptionMutations";
+export {
+    useCreateSubscription,
+    useUpdateSubscription,
+    useCancelSubscription,
+    useReactiveSubscription
+} from "./mutations/useSubscriptionMutations";
 
 export {
-useGetSubscription,
-useGeUsertSubscription,
-useGetSubscriptionHistory,
+    useGetSubscription,
+    useGeUsertSubscription,
+    useGetSubscriptionHistory,
 } from "./queries/useSubscriptionQueries";

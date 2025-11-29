@@ -81,44 +81,49 @@ const categories = [
   "Cardiologia",
 ];
 
-// Schema de validação com Zod
-const ebookFormSchema = z
-  .object({
-    title: z
-      .string()
-      .min(1, "Título é obrigatório")
-      .min(3, "Título deve ter pelo menos 3 caracteres"),
-    description: z
-      .string()
-      .min(1, "Descrição é obrigatória")
-      .min(10, "Descrição deve ter pelo menos 10 caracteres"),
-    category: z.string().min(1, "Categoria é obrigatória"),
-    status: z.enum(["published", "draft"]),
-    isPaid: z.boolean(),
-    price: z.number().min(0, "Preço deve ser maior que 0").optional(),
-    coverFile: z.any().optional(),
-    ebookFile: z.any().optional(),
-  })
-  .refine(
-    (data) => {
-      // Se é pago, deve ter preço
-      if (data.isPaid && (!data.price || data.price <= 0)) {
-        return false;
-      }
-      return true;
-    },
-    {
-      message: "Preço é obrigatório para conteúdo pago",
-      path: ["price"],
-    },
-  );
-
-// Schema dinâmico para novo ebook (arquivo obrigatório)
-const createEbookFormSchema = ebookFormSchema.extend({
-  ebookFile: z
-    .any()
-    .refine((file) => file instanceof File, "Arquivo do ebook é obrigatório"),
+// 1. Schema Base (apenas a estrutura, sem refinamentos)
+const baseEbookSchema = z.object({
+  title: z
+    .string()
+    .min(1, "Título é obrigatório")
+    .min(3, "Título deve ter pelo menos 3 caracteres"),
+  description: z
+    .string()
+    .min(1, "Descrição é obrigatória")
+    .min(10, "Descrição deve ter pelo menos 10 caracteres"),
+  category: z.string().min(1, "Categoria é obrigatória"),
+  status: z.enum(["published", "draft"]),
+  isPaid: z.boolean(),
+  price: z.number().min(0, "Preço deve ser maior que 0").optional(),
+  coverFile: z.any().optional(),
+  ebookFile: z.any().optional(),
 });
+
+// Função de validação do preço (reutilizável)
+const validatePrice = (data: { isPaid: boolean; price?: number }) => {
+  if (data.isPaid && (!data.price || data.price <= 0)) {
+    return false;
+  }
+  return true;
+};
+
+// 2. Schema para Edição (usa a base + refine)
+const ebookFormSchema = baseEbookSchema.refine(validatePrice, {
+  message: "Preço é obrigatório para conteúdo pago",
+  path: ["price"],
+});
+
+// 3. Schema para Criação (estende a base + refine)
+const createEbookFormSchema = baseEbookSchema
+  .extend({
+    ebookFile: z
+      .any()
+      .refine((file) => file instanceof File, "Arquivo do ebook é obrigatório"),
+  })
+  .refine(validatePrice, {
+    message: "Preço é obrigatório para conteúdo pago",
+    path: ["price"],
+  });
 
 type EbookFormData = z.infer<typeof ebookFormSchema>;
 
@@ -181,12 +186,6 @@ export default function ConteudoPage() {
   };
 
   const handleSubmit = (data: EbookFormData) => {
-    // Validação adicional para novo ebook
-    if (!editingEbook && !data.ebookFile) {
-      toast.error("Arquivo do ebook é obrigatório para novos ebooks");
-      return;
-    }
-
     const newEbook: Ebook = {
       id: editingEbook?.id || Date.now().toString(),
       title: data.title,
@@ -195,7 +194,7 @@ export default function ConteudoPage() {
       isPaid: data.isPaid,
       price: data.isPaid ? data.price : undefined,
       coverImage: "/placeholder.svg?height=120&width=80",
-      fileUrl: data.ebookFile
+      fileUrl: "ebookFile" in data && data.ebookFile instanceof File
         ? `/ebooks/${data.ebookFile.name}`
         : editingEbook?.fileUrl || "",
       downloads: editingEbook?.downloads || 0,
@@ -557,23 +556,6 @@ export default function ConteudoPage() {
                 </div>
               </CardContent>
             </Card>
-
-            {/* NAO USADO */}
-            {/* <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">
-                      Total Downloads
-                    </p>
-                    <p className="text-2xl font-bold text-gray-900">
-                      {ebooks.reduce((sum, e) => sum + e.downloads, 0)}
-                    </p>
-                  </div>
-                  <Download className="h-8 w-8 text-purple-500" />
-                </div>
-              </CardContent>
-            </Card> */}
           </div>
 
           {/* Ebooks Table */}
