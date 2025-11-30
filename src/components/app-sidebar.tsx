@@ -8,6 +8,7 @@ import {
   IconSettings,
   IconUsers,
 } from "@tabler/icons-react";
+import { signOut } from "next-auth/react";
 
 import {
   Sidebar,
@@ -47,18 +48,29 @@ const data = {
 };
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  // 2. Função para realizar o logout e redirecionar
+  const handleLogout = async () => {
+    await signOut({ 
+      callbackUrl: "/", 
+      redirect: true 
+    });
+  };
+
   return (
     <Sidebar collapsible="offcanvas" {...props}>
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            <Image
-              width={200}
-              height={100}
-              src="./images/home/logo-principal.svg"
-              alt="User Avatar"
-              className="rounded-full"
-            />
+            <div className="flex justify-center py-2">
+              <Image
+                width={140}
+                height={70}
+                src="/images/home/logo-principal.svg" 
+                alt="HealthFirst Logo"
+                className="object-contain"
+                priority
+              />
+            </div>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
@@ -66,8 +78,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <NavMain items={data.navMain} />
       </SidebarContent>
       <SidebarFooter>
-        <Button variant="outline">
-          <IconLogout /> Sair
+        {/* 3. Botão com ação de logout */}
+        <Button 
+          variant="outline" 
+          onClick={handleLogout}
+          className="w-full flex items-center justify-start gap-2"
+        >
+          <IconLogout className="size-4" /> 
+          Sair
         </Button>
       </SidebarFooter>
     </Sidebar>
