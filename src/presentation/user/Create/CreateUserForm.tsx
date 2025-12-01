@@ -114,8 +114,9 @@ export function CreateUserForm() {
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  <SelectItem value={UserRole.USER}>Usuário</SelectItem>
-                  <SelectItem value={UserRole.ADMIN}>Administrador</SelectItem>
+                  <SelectItem value={UserRole.USER}>Paciente</SelectItem>
+                  <SelectItem value={UserRole.DOCTOR}>Médico</SelectItem>
+                  <SelectItem value={UserRole.ADMIN}>Admin Master</SelectItem>
                 </SelectContent>
               </Select>
               <FormMessage />

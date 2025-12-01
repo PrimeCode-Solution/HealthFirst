@@ -1,11 +1,9 @@
-// app/api/appointments/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/app/providers/prisma";
 import {
-  PrismaClient,
   AppointmentStatus,
   ConsultationType,
   PaymentStatus,
-  UserRole,
 } from "@/generated/prisma";
 import {
   parseISO,
@@ -13,10 +11,9 @@ import {
   startOfDay,
   endOfDay,
 } from "date-fns";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth-config";
 
-const prisma = new PrismaClient();
-
-/* ----------------- helpers de horário ----------------- */
 function toMinutes(hhmm: string): number {
   const [hh, mm] = hhmm.split(":").map(Number);
   return hh * 60 + mm;
@@ -25,7 +22,7 @@ function overlap(aStart: number, aEnd: number, bStart: number, bEnd: number) {
   return aStart < bEnd && aEnd > bStart;
 }
 function isDayEnabled(bh: any, date: Date) {
-  const wd = date.getDay(); // usando fuso local do servidor
+  const wd = date.getDay();
   const map: Record<number, boolean> = {
     0: bh.sundayEnabled,
     1: bh.mondayEnabled,
@@ -43,7 +40,6 @@ async function getBusinessHoursOrThrow() {
   return bh;
 }
 
-/* ----------------- valida slot com date-fns ----------------- */
 async function validateSlotOr409(params: {
   dateIso: string;
   startTime: string;
@@ -52,7 +48,6 @@ async function validateSlotOr409(params: {
 }) {
   const { dateIso, startTime, endTime, excludeAppointmentId } = params;
 
-  // validação de data com date-fns
   const dateObj = parseISO(String(dateIso));
   if (!isValidDate(dateObj)) {
     return { error: { code: 400, msg: "data inválida (ISO)" } };
@@ -73,7 +68,6 @@ async function validateSlotOr409(params: {
     return { error: { code: 400, msg: "intervalo de horário inválido" } };
   }
 
-  // regras de funcionamento
   const bh = await getBusinessHoursOrThrow();
   if (!isDayEnabled(bh, dateObj)) {
     return {
@@ -104,7 +98,6 @@ async function validateSlotOr409(params: {
     };
   }
 
-  // colisão no mesmo dia (usando startOfDay/endOfDay da date-fns)
   const dayStart = startOfDay(dateObj);
   const dayEnd = endOfDay(dateObj);
 
@@ -131,36 +124,41 @@ async function validateSlotOr409(params: {
   return { ok: true };
 }
 
-/* ----------------- auth & admin (placeholders) ----------------- */
-async function getAuthUser(req: NextRequest): Promise<{ id: string } | null> {
-  const id = req.headers.get("x-user-id");
-  return id ? { id } : null;
-}
-async function ensureAdmin(userId: string) {
-  const me = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { role: true },
-  });
-  return me?.role === UserRole.ADMIN;
-}
-
-/* ============================== PUT ============================== */
 export async function PUT(
   req: NextRequest,
-  props: { params: Promise<{ id: string }> } 
+  props: { params: Promise<{ id: string }> },
 ) {
   try {
-    const params = await props.params; 
+    const session = await getServerSession(authOptions);
+    if (!session || !session.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const params = await props.params;
     const { id } = params;
 
-    const user = await getAuthUser(req);
-    if (!user?.id)
-      return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-    const isAdmin = await ensureAdmin(user.id);
-    if (!isAdmin)
-      return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    const current = await prisma.appointment.findUnique({ where: { id } });
+    if (!current)
+      return NextResponse.json({ error: "not_found" }, { status: 404 });
 
-    // O restante do código da função PUT continua igual...
+    if (current.userId !== session.user.id && session.user.role !== "ADMIN") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+
+    const isOwner = current.userId === session.user.id;
+    const isAdmin = session.user.role === "ADMIN";
+    const isAssignedDoctor = current.doctorId === session.user.id;
+
+    if (!isAdmin && !isAssignedDoctor && !isOwner) {
+       // Se for um médico tentando mexer na consulta de outro médico:
+       if (session.user.role === 'DOCTOR') {
+          return NextResponse.json({ error: "Forbidden: Not assigned doctor" }, { status: 403 });
+       }
+       // Outros casos
+       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const body = await req.json().catch(() => ({}) as any);
 
     const {
@@ -175,14 +173,10 @@ export async function PUT(
       notes,
     } = body ?? {};
 
-    const current = await prisma.appointment.findUnique({ where: { id } });
-    if (!current)
-      return NextResponse.json({ error: "not_found" }, { status: 404 });
     if (current.status === AppointmentStatus.CANCELLED) {
       return NextResponse.json({ error: "already_cancelled" }, { status: 400 });
     }
 
-    // defaults + normalização de data (date-fns)
     const newDateIso: string = date ? String(date) : current.date.toISOString();
     const parsed = parseISO(newDateIso);
     if (!isValidDate(parsed)) {
@@ -195,7 +189,6 @@ export async function PUT(
     const newStart: string = startTime ?? current.startTime;
     const newEnd: string = endTime ?? current.endTime;
 
-    // revalida slot se alterou data/hora
     if (date || startTime || endTime) {
       const check = await validateSlotOr409({
         dateIso: newDateIso,
@@ -212,7 +205,6 @@ export async function PUT(
       }
     }
 
-    // valida type/status
     let newType: ConsultationType | undefined;
     if (typeof type === "string") {
       const allowed = Object.values(ConsultationType);
@@ -240,7 +232,7 @@ export async function PUT(
     const updated = await prisma.appointment.update({
       where: { id },
       data: {
-        date: parsed, // já validado
+        date: parsed,
         startTime: newStart,
         endTime: newEnd,
         type: newType ?? current.type,
@@ -265,34 +257,35 @@ export async function PUT(
   }
 }
 
-/* ============================ DELETE ============================ */
 export async function DELETE(
   req: NextRequest,
   props: { params: Promise<{ id: string }> },
 ) {
   try {
-    const params = await props.params; 
-    const { id } = params;
+    const session = await getServerSession(authOptions);
+    if (!session || !session.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-    const user = await getAuthUser(req);
-    if (!user?.id)
-      return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-    const isAdmin = await ensureAdmin(user.id);
-    if (!isAdmin)
-      return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    const params = await props.params;
+    const { id } = params;
 
     const appt = await prisma.appointment.findUnique({
       where: { id },
       include: { payment: true },
     });
+
     if (!appt)
       return NextResponse.json({ error: "not_found" }, { status: 404 });
+
+    if (appt.userId !== session.user.id && session.user.role !== "ADMIN") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     if (appt.status === AppointmentStatus.CANCELLED) {
-      // idempotente
       return new NextResponse(null, { status: 204 });
     }
 
-    // transação para manter consistência com pagamento
     await prisma.$transaction(async (tx) => {
       if (appt.payment) {
         await tx.payment.update({

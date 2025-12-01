@@ -1,49 +1,26 @@
-// app/api/appointments/user/[userId]/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import {
-  PrismaClient,
-  Prisma,
-  AppointmentStatus,
-  UserRole,
-} from "@/generated/prisma";
+import { prisma } from "@/app/providers/prisma";
+import { AppointmentStatus } from "@/generated/prisma";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth-config";
 
-const prisma = new PrismaClient();
-
-// auth básica (trocar por next-auth/clerk/etc)
-async function getAuthUser(req: NextRequest): Promise<{ id: string } | null> {
-  const id = req.headers.get("x-user-id");
-  return id ? { id } : null;
-}
-
-// checa acesso: admin ou o próprio user
-async function canReadUserAppointments(meId: string, targetUserId: string) {
-  if (meId === targetUserId) return true;
-  const me = await prisma.user.findUnique({
-    where: { id: meId },
-    select: { role: true },
-  });
-  return me?.role === UserRole.ADMIN;
-}
-
-// GET /api/appointments/user/:userId
 export async function GET(
   req: NextRequest,
   props: { params: Promise<{ userId: string }> },
 ) {
   try {
-    // auth
-    const user = await getAuthUser(req);
-    if (!user?.id)
-      return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    const session = await getServerSession(authOptions);
+    if (!session || !session.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-    // permissão
     const params = await props.params;
     const { userId } = params;
-    const allowed = await canReadUserAppointments(user.id, userId);
-    if (!allowed)
-      return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
-    // query
+    if (session.user.id !== userId && session.user.role !== "ADMIN") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const url = new URL(req.url);
     const status = url.searchParams.get("status") ?? undefined;
     const dateStart = url.searchParams.get("dateStart") ?? undefined;
@@ -51,15 +28,13 @@ export async function GET(
     const page = url.searchParams.get("page") ?? "1";
     const pageSize = url.searchParams.get("pageSize") ?? "20";
 
-    // paginação
     const p = Math.max(parseInt(page, 10) || 1, 1);
     const psRaw = parseInt(pageSize, 10) || 20;
     const ps = Math.min(Math.max(psRaw, 1), 100);
     const skip = (p - 1) * ps;
     const take = ps;
 
-    // filtros
-    const where: Prisma.AppointmentWhereInput = { userId };
+    const where: any = { userId };
     if (status) {
       const allowedStatuses = Object.values(AppointmentStatus) as string[];
       if (!allowedStatuses.includes(status)) {
@@ -84,7 +59,6 @@ export async function GET(
       if (de) where.date.lte = de;
     }
 
-    // busca
     const [total, items] = await Promise.all([
       prisma.appointment.count({ where }),
       prisma.appointment.findMany({
@@ -118,7 +92,6 @@ export async function GET(
       }),
     ]);
 
-    // resposta
     const pageCount = Math.ceil(total / ps);
     return NextResponse.json({
       meta: { total, page: p, pageSize: ps, pageCount },

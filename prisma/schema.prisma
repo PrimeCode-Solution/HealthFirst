@@ -14,6 +14,7 @@ datasource db {
 // Enum para tipos de usuário
 enum UserRole {
   ADMIN
+  DOCTOR
   USER
 }
 
@@ -69,7 +70,8 @@ model User {
   updatedAt DateTime @updatedAt
   
   // Relações
-  appointments   Appointment[]
+  appointments        Appointment[] @relation("PatientAppointments")
+  doctorAppointments  Appointment[] @relation("DoctorAppointments")
   subscription   Subscription?
   ebookAccess    UserEbookAccess[]
   
@@ -183,6 +185,7 @@ model BusinessHours {
 model Appointment {
   id          String            @id @default(cuid())
   userId      String
+  doctorId    String?
   
   // Dados do agendamento
   date        DateTime
@@ -202,7 +205,8 @@ model Appointment {
   updatedAt   DateTime         @updatedAt
   
   // Relações
-  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User      @relation("PatientAppointments", fields: [userId], references: [id], onDelete: Cascade)
+  doctor      User?     @relation("DoctorAppointments", fields: [doctorId], references: [id])
   payment     Payment?
   
   @@map("appointments")

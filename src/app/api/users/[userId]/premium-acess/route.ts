@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { PrismaClient } from '@/generated/prisma';
+import { prisma } from "@/app/providers/prisma";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth-config";
 
-const prisma = new PrismaClient();
-
-// Função para consultar status na API do Mercado Pago
 async function checkSubscriptionStatusMP(
   preapprovalId: string,
 ): Promise<boolean> {
@@ -23,8 +22,6 @@ async function checkSubscriptionStatusMP(
     }
 
     const subscription = await response.json();
-
-    // Verificar se a assinatura está ativa no MP
     return subscription.status === "authorized";
   } catch (error) {
     console.error("Erro ao verificar assinatura no MP:", error);
@@ -37,10 +34,18 @@ export async function GET(
   props: { params: Promise<{ userId: string }> }
 ) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session || !session.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const params = await props.params;
     const { userId } = params;
 
-    // Buscar o usuário com sua assinatura local
+    if (session.user.id !== userId && session.user.role !== "ADMIN") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const user = await prisma.user.findUnique({
       where: { id: userId },
       include: {
@@ -55,12 +60,10 @@ export async function GET(
       );
     }
 
-    // Se não tem assinatura cadastrada, não tem acesso
     if (!user.subscription?.preapprovalId) {
       return NextResponse.json({ hasAccess: false });
     }
 
-    // Consultar status atual no Mercado Pago
     const hasAccess = await checkSubscriptionStatusMP(
       user.subscription.preapprovalId,
     );

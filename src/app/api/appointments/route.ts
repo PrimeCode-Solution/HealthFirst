@@ -1,12 +1,10 @@
-// app/api/appointments/route.ts
 import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/app/providers/prisma";
 import {
-  PrismaClient,
-  Prisma,
   AppointmentStatus,
   PaymentStatus,
   ConsultationType,
-} from "@/generated/prisma"; // <— ajuste se seu route.ts estiver noutra pasta
+} from "@/generated/prisma";
 import { z } from "zod";
 import {
   parseISO,
@@ -14,11 +12,9 @@ import {
   startOfDay,
   endOfDay,
 } from "date-fns";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth-config";
 
-const prisma = new PrismaClient();
-
-/* ===================== GET /api/appointments ===================== */
-/** ----- schema dos filtros (querystring) ----- */
 const querySchema = z.object({
   status: z
     .string()
@@ -46,6 +42,11 @@ const querySchema = z.object({
 
 export async function GET(req: NextRequest) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session || !session.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const url = new URL(req.url);
     const parsed = querySchema.safeParse(
       Object.fromEntries(url.searchParams.entries()),
@@ -60,11 +61,15 @@ export async function GET(req: NextRequest) {
     const { status, dateStart, dateEnd, userId, q, page, pageSize } =
       parsed.data;
 
-    // ----- monta where -----
-    const where: Prisma.AppointmentWhereInput = {};
+    const where: any = {};
 
     if (status) where.status = status as AppointmentStatus;
-    if (userId) where.userId = userId;
+
+    if (session.user.role === "ADMIN" || session.user.role === "DOCTOR") {
+      if (userId) where.userId = userId;
+    } else {
+      where.userId = session.user.id;
+    }
 
     if (dateStart || dateEnd) {
       const ds = dateStart ? parseISO(dateStart) : undefined;
@@ -89,7 +94,6 @@ export async function GET(req: NextRequest) {
     const skip = (page! - 1) * pageSize!;
     const take = pageSize!;
 
-    // ----- consulta + total -----
     const [total, items] = await Promise.all([
       prisma.appointment.count({ where }),
       prisma.appointment.findMany({
@@ -133,7 +137,7 @@ export async function GET(req: NextRequest) {
         pageSize,
         pageCount: Math.ceil(total / pageSize!),
       },
-      filters: { status, dateStart, dateEnd, userId, q },
+      filters: { status, dateStart, dateEnd, userId: where.userId, q },
       items,
     });
   } catch (err) {
@@ -142,7 +146,6 @@ export async function GET(req: NextRequest) {
   }
 }
 
-/* ===================== Helpers de horário (POST usa) ===================== */
 function toMinutes(hhmm: string): number {
   const [hh, mm] = hhmm.split(":").map(Number);
   return hh * 60 + mm;
@@ -172,7 +175,6 @@ async function getBusinessHoursOrThrow() {
   return bh;
 }
 
-/* ----------------- mock Mercado Pago (trocar depois) ----------------- */
 async function createMercadoPagoPreference(input: {
   appointmentId: string;
   amount: number;
@@ -188,15 +190,7 @@ async function createMercadoPagoPreference(input: {
   };
 }
 
-/* ------------------- auth placeholder (trocar pelo Clerk) ------------------- */
-async function getAuthUser(req: NextRequest): Promise<{ id: string } | null> {
-  const headerId = req.headers.get("x-user-id");
-  return headerId ? { id: headerId } : null;
-}
-
-/* ===================== POST /api/appointments ===================== */
 const bodySchema = z.object({
-  // data ISO (ex.: "2025-09-04" ou "2025-09-04T00:00:00Z")
   date: z
     .string()
     .refine((v) => isValidDate(parseISO(v)), "data inválida (use ISO string)"),
@@ -225,9 +219,9 @@ const bodySchema = z.object({
 
 export async function POST(req: NextRequest) {
   try {
-    const user = await getAuthUser(req);
-    if (!user?.id) {
-      return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    const session = await getServerSession(authOptions);
+    if (!session || !session.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const parsed = bodySchema.safeParse(await req.json());
@@ -265,7 +259,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Regras de funcionamento
     const bh = await getBusinessHoursOrThrow();
     if (!isDayEnabled(bh, dateObj)) {
       return NextResponse.json(
@@ -299,7 +292,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Disponibilidade do dia (UTC 00:00–23:59:59)
     const sameDayStart = new Date(
       Date.UTC(
         dateObj.getUTCFullYear(),
@@ -341,7 +333,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "time_unavailable" }, { status: 409 });
     }
 
-    // Tipo de consulta
     let typeValue: ConsultationType = ConsultationType.GENERAL;
     if (typeof type === "string") {
       const allowed = Object.values(ConsultationType);
@@ -350,7 +341,6 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // amount -> número
     const normalizedAmount =
       typeof amount === "number"
         ? amount
@@ -364,12 +354,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Transação: cria Appointment (PENDING) + Payment (PENDING)
     const { appointment, payment, pref } = await prisma.$transaction(
       async (tx) => {
         const appointment = await tx.appointment.create({
           data: {
-            userId: user.id,
+            userId: session.user.id,
             date: dateObj,
             startTime,
             endTime,
@@ -435,8 +424,6 @@ export async function POST(req: NextRequest) {
         { status: 500 },
       );
     }
-    // conflito de chave única (se você adicionar @@unique em [date, startTime], por ex.)
-    // Prisma code P2002
     if (e?.code === "P2002") {
       return NextResponse.json({ error: "time_unavailable" }, { status: 409 });
     }
