@@ -1,191 +1,79 @@
 "use client";
 
 import React from "react";
-import { Controller } from "react-hook-form";
-import { Button } from "@/components/ui/button";
+import { useSession } from "next-auth/react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { UpdateUserForm } from "@/presentation/user/Update/UpdateUserForm";
+import { ScheduleManager } from "@/components/config/schedule-manager";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Clock, Save } from "lucide-react";
-import { useBusinessHoursForm } from "@/presentation/business-hours/create/CreateBusinessHoursForm";
-import { useCreateBussinesHours } from "@/presentation/business-hours/mutations/useBusinessHoursMutation";
-import { CreateBusinessHoursDTO } from "@/modules/business-hours/domain/businessHours.interface";
+import { User as UserIcon, Loader2 } from "lucide-react";
+import { useGetUserById } from "@/presentation/user/queries/useUserQueries";
+import { toast } from "sonner";
 
-export default function Config() {
-  const {
-    register,
-    control,
-    handleSubmit,
-    errors,
-    watch,
-    setValue,
-    isSubmitting,
-  } = useBusinessHoursForm();
+export default function ConfigPage() {
+  const { data: session, status } = useSession();
+  const userId = session?.user?.id ?? "";
 
-  const { mutate: createBusinessHours } = useCreateBussinesHours();
+  const { data: user, isLoading, refetch } = useGetUserById(userId);
 
-  const lunchBreakEnabled = watch("lunchBreakEnabled");
-
-  const onSubmit = (data: CreateBusinessHoursDTO) =>{
-    createBusinessHours({data});
-    console.log(data)
+  if (status === "loading" || isLoading) {
+    return (
+      <div className="flex h-full w-full items-center justify-center p-12">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
   }
-  
+
+  if (!session || !session.user) return null;
+
+  const isDoctorOrAdmin = session.user.role === "ADMIN" || session.user.role === "DOCTOR";
+
+  const handleProfileSuccess = () => {
+    toast.success("Perfil atualizado com sucesso!"); 
+    refetch(); 
+  };
+
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8 max-w-4xl mx-auto">
       <div className="mb-8">
-        <h1 className="mb-2 text-3xl font-bold">Configurações - Horários</h1>
-        <p className="text-gray-600">Defina os horários de funcionamento</p>
+        <h1 className="text-3xl font-bold text-gray-900">Configurações</h1>
+        <p className="text-muted-foreground">Gerencie seu perfil e preferências.</p>
       </div>
 
-      <div className="space-y-6">
-        <Card className="max-w-md">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Clock className="h-5 w-5" />
-              Horários Básicos
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Horário de Início */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Horário de Início</label>
-              <Input 
-                type="time" 
-                {...register("startTime")} 
-                defaultValue="08:00"
-              />
-              {errors.startTime && (
-                <p className="text-sm text-red-500">{errors.startTime.message}</p>
-              )}
-            </div>
+      <Tabs defaultValue="profile" className="w-full">
+        <TabsList className="grid w-full grid-cols-2 lg:w-[400px]">
+          <TabsTrigger value="profile">Meu Perfil</TabsTrigger>
+          {isDoctorOrAdmin && <TabsTrigger value="schedule">Agenda & Horários</TabsTrigger>}
+        </TabsList>
 
-            {/* Horário de Término */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Horário de Término</label>
-              <Input 
-                type="time" 
-                {...register("endTime")} 
-                defaultValue="18:00"
-              />
-              {errors.endTime && (
-                <p className="text-sm text-red-500">{errors.endTime.message}</p>
-              )}
-            </div>
-
-            {/* Duração da Consulta */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Duração da Consulta (min)</label>
-              <Input
-                required
-                type="number"
-                min="5"
-                max="120"
-                {...register("appointmentDuration", { valueAsNumber: true })}
-                defaultValue={30}
-              />
-              {errors.appointmentDuration && (
-                <p className="text-sm text-red-500">
-                  {errors.appointmentDuration.message}
-                </p>
-              )}
-            </div>
-
-            {/* Intervalo para Almoço */}
-            <div className="flex items-center justify-between py-2">
-              <div>
-                <label className="text-sm font-medium">Intervalo para Almoço</label>
-                <p className="text-sm text-gray-500">Bloquear horários para almoço</p>
-              </div>
-              <Controller
-                name="lunchBreakEnabled"
-                control={control}
-                defaultValue={true}
-                render={({ field }) => (
-                  <Switch
-                    checked={field.value}
-                    onCheckedChange={field.onChange}
-                  />
-                )}
-              />
-            </div>
-
-            {/* Horários de Almoço (condicional) */}
-            {lunchBreakEnabled && (
-              <>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Início do Almoço</label>
-                  <Input 
-                    type="time" 
-                    {...register("lunchStartTime")} 
-                    defaultValue="12:00"
-                  />
-                  {errors.lunchStartTime && (
-                    <p className="text-sm text-red-500">
-                      {errors.lunchStartTime.message}
-                    </p>
-                  )}
+        <TabsContent value="profile">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <UserIcon className="h-5 w-5" /> Dados Pessoais
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {user ? (
+                <UpdateUserForm user={user} onSuccess={handleProfileSuccess} />
+              ) : (
+                <div className="flex flex-col items-center justify-center py-6 text-center">
+                   <p className="text-muted-foreground mb-2">Não foi possível carregar os dados.</p>
+                   <button onClick={() => refetch()} className="text-primary hover:underline text-sm">
+                     Tentar novamente
+                   </button>
                 </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Fim do Almoço</label>
-                  <Input 
-                    type="time" 
-                    {...register("lunchEndTime")} 
-                    defaultValue="13:00"
-                  />
-                  {errors.lunchEndTime && (
-                    <p className="text-sm text-red-500">
-                      {errors.lunchEndTime.message}
-                    </p>
-                  )}
-                </div>
-              </>
-            )}
-
-            {/* Dias Disponíveis */}
-            <div className="space-y-3 pt-4">
-              <label className="text-sm font-medium">Dias Disponíveis</label>
-              <div className="space-y-2">
-                {[
-                  { name: "mondayEnabled", label: "Segunda-feira", defaultValue: true },
-                  { name: "tuesdayEnabled", label: "Terça-feira", defaultValue: true },
-                  { name: "wednesdayEnabled", label: "Quarta-feira", defaultValue: true },
-                  { name: "thursdayEnabled", label: "Quinta-feira", defaultValue: true },
-                  { name: "fridayEnabled", label: "Sexta-feira", defaultValue: true },
-                  { name: "saturdayEnabled", label: "Sábado", defaultValue: false },
-                  { name: "sundayEnabled", label: "Domingo", defaultValue: false },
-                ].map((day) => (
-                  <div key={day.name} className="flex items-center space-x-3">
-                    <Controller
-                      name={day.name as any}
-                      control={control}
-                      defaultValue={day.defaultValue}
-                      render={({ field }) => (
-                        <Checkbox
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                        />
-                      )}
-                    />
-                    <label className="text-sm font-normal">{day.label}</label>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Button 
-          onClick={handleSubmit(onSubmit)}
-          className="flex items-center gap-2"
-          disabled={isSubmitting}
-        >
-          <Save className="h-4 w-4" />
-          {isSubmitting ? "Salvando..." : "Salvar"}
-        </Button>
-      </div>
+        {isDoctorOrAdmin && (
+          <TabsContent value="schedule">
+             <ScheduleManager />
+          </TabsContent>
+        )}
+      </Tabs>
     </div>
   );
 }

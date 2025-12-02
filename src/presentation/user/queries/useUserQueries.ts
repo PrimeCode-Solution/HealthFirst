@@ -1,6 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { createUserRepository } from "@/modules/user/infrastructure/userRepository";
 import { userService } from "../services/userService";
+import api from "@/lib/api";
+
 
 export const USER_QUERY_KEYS = {
   all: ["users"] as const,
@@ -30,10 +32,13 @@ export function useListUsers() {
   });
 }
 
-export function useGetUserById(userId: string) {
+export const useGetUserById = (userId: string) => {
   return useQuery({
-    queryKey: USER_QUERY_KEYS.detail(userId),
-    queryFn: () => userService.getUserById(userId),
-    enabled: !!userId,
+    queryKey: ["user", userId],
+    queryFn: async () => {
+      const { data } = await api.get(`/users/${userId}`);
+      return data;
+    },
+    enabled: !!userId, 
   });
-}
+};

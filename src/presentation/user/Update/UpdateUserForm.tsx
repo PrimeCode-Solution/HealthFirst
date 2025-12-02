@@ -5,6 +5,7 @@ import {
   useUpdateUserForm,
   UseUpdateUserFormProps,
 } from "./useUpdateUserForm";
+import { useUpdateUserMutation } from "../mutations/useUserMutations";
 import {
   Form,
   FormControl,
@@ -34,10 +35,25 @@ interface UpdateUserFormProps {
 }
 
 export function UpdateUserForm({ user, onSuccess }: UpdateUserFormProps) {
+  const updateMutation = useUpdateUserMutation();
   const { form, handleSubmit, isPending } = useUpdateUserForm({
     user,
     onSuccess,
   });
+
+  const onSubmit = (data: any) => {
+    updateMutation.mutate(
+      { 
+        userId: user.id, 
+        data: data    
+      },
+      {
+        onSuccess: () => {
+          if (onSuccess) onSuccess();
+        }
+      }
+    );
+  };
 
   return (
     <Form {...form}>
@@ -94,7 +110,7 @@ export function UpdateUserForm({ user, onSuccess }: UpdateUserFormProps) {
 
         <Button type="submit" disabled={isPending} className="w-full">
           <Save className="mr-2 h-4 w-4" />
-          {isPending ? "Atualizando..." : "Atualizar Usuário"}
+          {updateMutation.isPending ? "Salvando..." : "Salvar Alterações"}
         </Button>
       </form>
     </Form>

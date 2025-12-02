@@ -74,6 +74,7 @@ model User {
   doctorAppointments  Appointment[] @relation("DoctorAppointments")
   subscription   Subscription?
   ebookAccess    UserEbookAccess[]
+  businessHours BusinessHours?
   
   @@map("users")
 }
@@ -151,18 +152,20 @@ model UserEbookAccess {
   @@map("user_ebook_access")
 }
 
-// Model para configurações de horários
 model BusinessHours {
-  id                String    @id @default(cuid())
+  id        String   @id @default(cuid())
   
-  // Horários básicos
-  startTime         String    // "08:00"
-  endTime           String    // "18:00"
+  // --- Vínculo com o Médico
+  doctorId  String   @unique 
+  doctor    User     @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  // --- Campos de Horários
+  startTime         String    
+  endTime           String    
   lunchBreakEnabled Boolean   @default(false)
-  lunchStartTime    String?   // "12:00"
-  lunchEndTime      String?   // "13:00"
+  lunchStartTime    String?
+  lunchEndTime      String?
   
-  // Dias da semana disponíveis
   mondayEnabled     Boolean   @default(true)
   tuesdayEnabled    Boolean   @default(true)
   wednesdayEnabled  Boolean   @default(true)
@@ -171,12 +174,10 @@ model BusinessHours {
   saturdayEnabled   Boolean   @default(false)
   sundayEnabled     Boolean   @default(false)
   
-  // Configurações gerais
-  appointmentDuration Int     @default(30) // em minutos
-  
-  // Timestamps
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  appointmentDuration Int     @default(30)
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
   
   @@map("business_hours")
 }
