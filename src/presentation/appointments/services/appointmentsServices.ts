@@ -5,46 +5,36 @@ import {
   UpdateAppointmentStatusDTO,
 } from "@/modules/appointments/domain/appointment.interface";
 
+interface FindAppointmentsFilters {
+  dateStart?: string;
+  dateEnd?: string;
+  status?: string;
+  page?: number;
+  pageSize?: number;
+}
+
 async function createAppointment(
   data: CreateAppointmentDTO,
 ): Promise<Appointment> {
   const response = await api.post(`/appointments`, data);
 
-  if (!response.data.success || !response.data.data) {
-    throw new Error(response.data.error || "Erro ao criar agendamento!");
-  }
-  return response.data.data;
+  return response.data.appointment;
 }
 
-async function findAllAppointments(): Promise<Appointment[]> {
-  const response = await api.get("/appointments");
+async function findAllAppointments(filters?: FindAppointmentsFilters): Promise<Appointment[]> {
 
-  if (!response.data.success || !response.data.data) {
-    throw new Error(response.data.error || "Erro ao obter todos agendamentos!");
-  }
-  return response.data.data;
+  const response = await api.get("/appointments", { params: filters });
+  return response.data.items || [];
 }
 
 async function findAppointmentById(id: string): Promise<Appointment> {
   const response = await api.get(`/appointments/${id}`);
-
-  if (!response.data.success || !response.data.data) {
-    throw new Error(
-      response.data.error || "Erro ao obter agendamentos por id!",
-    );
-  }
-  return response.data.data;
+  return response.data; 
 }
 
 async function findAppointmentsByUser(userId: string): Promise<Appointment[]> {
   const response = await api.get(`/appointments/user/${userId}`);
-
-  if (!response.data.success || !response.data.data) {
-    throw new Error(
-      response.data.error || "Erro ao obter agendamentos por usuário!",
-    );
-  }
-  return response.data.data;
+  return response.data.items || [];
 }
 
 async function updateAppointmentStatus(
@@ -52,20 +42,20 @@ async function updateAppointmentStatus(
 ): Promise<Appointment> {
   const { id, status } = data;
   const response = await api.put(`/appointments/${id}`, { status });
-
-  if (!response.data.success || !response.data.data) {
-    throw new Error(response.data.error || "Erro ao atualizar agendamento!");
-  }
-  return response.data.data;
+  
+  return response.data;
 }
 
-async function deleteAppointment(id: string): Promise<Appointment> {
-  const response = await api.delete(`/appointments/${id}`);
+async function updateAppointment(
+  id: string,
+  data: Partial<CreateAppointmentDTO>
+): Promise<Appointment> {
+  const response = await api.put(`/appointments/${id}`, data);
+  return response.data;
+}
 
-  if (!response.data.success || !response.data.data) {
-    throw new Error(response.data.error || "Erro ao deletar agendamento!");
-  }
-  return response.data.data;
+async function deleteAppointment(id: string): Promise<void> {
+  await api.delete(`/appointments/${id}`);
 }
 
 export const appointmentService = {
@@ -74,5 +64,6 @@ export const appointmentService = {
     findAppointmentById,
     findAppointmentsByUser,
     updateAppointmentStatus,
+    updateAppointment,
     deleteAppointment,
 };

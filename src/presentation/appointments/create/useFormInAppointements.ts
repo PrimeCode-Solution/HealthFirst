@@ -6,18 +6,20 @@ import { useCreateAppointmentMutation } from "../mutations/useAppointmentMutatio
 export const ConsultationTypeSchema = z.enum(["GENERAL", "URGENT", "FOLLOWUP"]);
 
 const CreateAppointmentSchema = z.object({
-  userId: z.string(),
+  userId: z.string().optional(),
   date: z.date(),
-  startTime: z.string(),
-  endTime: z.string(),
+  startTime: z.string().min(1, "Horário inicial obrigatório"),
+  endTime: z.string().min(1, "Horário final obrigatório"),
   type: ConsultationTypeSchema,
-  patientName: z.string(),
-  patientEmail: z.email().optional(),
+  patientName: z.string().min(1, "Nome é obrigatório"),
+  patientEmail: z.string().email("Email inválido").optional().or(z.literal("")),
   patientPhone: z.string().optional(),
   notes: z.string().optional(),
+  amount: z.coerce.number().min(1, "O valor deve ser maior que 0"),
+  description: z.string().min(1, "Descrição é obrigatória"),
 });
 
-type CreateAppointmentType = z.infer<typeof CreateAppointmentSchema>;
+export type CreateAppointmentType = z.infer<typeof CreateAppointmentSchema>;
 
 export function CreateAppointmentForm() {
   const form = useForm<CreateAppointmentType>({
@@ -32,6 +34,8 @@ export function CreateAppointmentForm() {
       patientEmail: "",
       patientPhone: "",
       notes: "",
+      amount: 99.99, 
+      description: "Consulta Médica",
     },
   });
 

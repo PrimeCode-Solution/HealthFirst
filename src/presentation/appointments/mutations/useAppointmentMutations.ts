@@ -55,3 +55,51 @@ export const useCancelAppointmentMutation = (id: string) => {
     },
   });
 }
+
+export const useRescheduleAppointmentMutation = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) =>
+      appointmentService.updateAppointment(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["appointments"] });
+      toast.success("Agendamento remarcado com sucesso!");
+    },
+    onError: (error: any) => {
+      const msg = error.response?.data?.error || error.message;
+      toast.error(`Erro ao remarcar: ${msg}`);
+    },
+  });
+};
+
+export const useEditAppointmentMutation = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<CreateAppointmentDTO> }) =>
+      appointmentService.updateAppointment(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["appointments"] });
+      toast.success("Agendamento atualizado com sucesso!");
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Erro ao atualizar agendamento!");
+    },
+  });
+};
+
+export const useDeleteAppointmentMutation = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => appointmentService.deleteAppointment(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["appointments"] });
+      toast.success("Agendamento excluído com sucesso!");
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Erro ao excluir agendamento!");
+    },
+  });
+};

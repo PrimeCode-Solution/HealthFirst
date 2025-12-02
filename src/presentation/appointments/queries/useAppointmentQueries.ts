@@ -1,6 +1,14 @@
 import { appointmentService } from '../services/appointmentsServices';
 import { useQuery } from '@tanstack/react-query';
 
+
+export const useAppointments = (filters?: any) => {
+  return useQuery({
+    queryKey: ['appointments', filters], 
+    queryFn: () => appointmentService.findAllAppointments(filters),
+  });
+}
+
 export const findAllAppointmentsQuery = () => {
   return useQuery({
     queryKey: ['appointments'],
