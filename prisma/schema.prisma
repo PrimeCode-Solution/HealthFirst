@@ -36,6 +36,7 @@ enum AppointmentStatus {
 enum PaymentStatus {
   PENDING
   APPROVED
+  CONFIRMED
   REJECTED
   CANCELLED
   REFUNDED
@@ -228,6 +229,7 @@ model Payment {
   currency              String        @default("BRL")
   description           String
   status                PaymentStatus @default(PENDING)
+  paymentMethod         String?
   
   // Dados do pagador
   payerEmail            String?
@@ -290,4 +292,21 @@ model WebhookEvent {
   createdAt     DateTime @default(now())
   
   @@map("webhook_events")
+}
+
+model ProcessedWebhookEvent {
+  id          String     @id @default(cuid())
+  eventId     String     @unique        //ID único do evento Mercado Pago (vem como "id" no payload)
+  type        String                   //"subscription", "payment", etc
+  action      String?                  // "payment.created", "payment.update", ect
+  processed   Boolean    @default(false)
+  processedAt DateTime?                // Quando foi realizado o proceso com sucesso
+  attempts    Int        @default(1)   // Contador de tentativas
+  error       String?    @db.Text      // Armazena falha, caso houver
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  
+  @@index([eventId])
+  @@index([processed])
+  @@map("processed_webhook_events")
 }
