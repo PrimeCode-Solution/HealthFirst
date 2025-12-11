@@ -51,7 +51,6 @@ export function CreateAppointmentForm() {
       ...data,
       date: data.date.toISOString(),
 
-      // ⭐ CORREÇÃO ⭐
       doctorId:
         data.doctorId && data.doctorId.trim() !== ""
           ? data.doctorId

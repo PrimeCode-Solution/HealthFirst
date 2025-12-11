@@ -75,9 +75,7 @@ export default function AgendamentosPage() {
         <Card className="min-h-[500px]">
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>
-              {date
-                ? format(date, "dd 'de' MMMM", { locale: ptBR })
-                : "Selecione uma data"}
+              {date ? format(date, "dd 'de' MMMM", { locale: ptBR }): "Selecione uma data"}
             </CardTitle>
 
             <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
