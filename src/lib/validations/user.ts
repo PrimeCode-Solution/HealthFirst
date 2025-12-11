@@ -11,7 +11,7 @@ export const createUserSchema = z.object({
   phone: z
     .string()
     .min(1, "O telefone é obrigatório")
-    .min(10, "Telefone incompleto"),
+    .regex(/^\(?\d{2}\)?\s?\d{4,5}-?\d{4}$/, "Número de WhatsApp inválido"),
   password: z
     .string()
     .min(6, "A senha deve ter pelo menos 6 caracteres"),
