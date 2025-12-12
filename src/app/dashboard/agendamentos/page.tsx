@@ -11,7 +11,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useCreateAppointmentMutation as CreateAppointmentForm } from "@/presentation/appointments/create/useCreateAppointmentMutation";
 import { EditAppointmentForm } from "@/presentation/appointments/update/EditAppointmentForm";
 import { useAppointments } from "@/presentation/appointments/queries/useAppointmentQueries";
-import { useDeleteAppointmentMutation } from "@/presentation/appointments/mutations/useAppointmentMutations";
+import { useDeleteAppointmentMutation, useCompleteAppointmentMutation } from "@/presentation/appointments/mutations/useAppointmentMutations";
 import AppointmentCard from "@/components/appointment-card";
 import { startOfDay, endOfDay, format } from "date-fns";
 import { Loader2 } from "lucide-react";
@@ -23,8 +23,10 @@ export default function AgendamentosPage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingAppointment, setEditingAppointment] = useState<any | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [completeAppointment, setCompletingAppointment] = useState<any | null>(null);
 
   const deleteMutation = useDeleteAppointmentMutation();
+  const completeMutation = useCompleteAppointmentMutation();
 
   const filters = date
     ? {
@@ -43,6 +45,14 @@ export default function AgendamentosPage() {
     if (deletingId) {
       deleteMutation.mutate(deletingId, {
         onSuccess: () => setDeletingId(null),
+      });
+    }
+  };
+
+  const handleComplete = () => {
+    if (completeAppointment) {
+      completeMutation.mutate(completeAppointment, {
+        onSuccess: () => setCompletingAppointment(null),
       });
     }
   };
@@ -105,6 +115,12 @@ export default function AgendamentosPage() {
                     currentUser={session?.user}
                     onEdit={(apt) => setEditingAppointment(apt)}
                     onDelete={(id) => setDeletingId(id)}
+                    onComplete={(apt) =>
+                      setCompletingAppointment({
+                        id: apt.id,
+                        status: "COMPLETED",
+                      })
+                    }
                   />
                 ))}
               </div>
@@ -159,6 +175,33 @@ export default function AgendamentosPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <AlertDialog
+        open={!!completeAppointment}
+        onOpenChange={(open) => !open && setCompletingAppointment(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Você realmente deseja finalizar esse agendamento?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Essa ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleComplete}
+              className="bg-primary text-destructive-foreground hover:bg-primary/90"
+            >
+              {completeMutation.isPending ? "Finalizando..." : "Finalizar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
     </div>
   );
 }

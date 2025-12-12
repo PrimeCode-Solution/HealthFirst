@@ -15,11 +15,13 @@ export default function AppointmentCard({
   appointment,
   onEdit,
   onDelete,
+  onComplete,
   currentUser,
 }: {
   appointment: any;
   onEdit: (apt: any) => void;
   onDelete: (id: string) => void;
+  onComplete: (apt: any) => void;
   currentUser: any;
 }) {
   // Permissões
@@ -29,6 +31,20 @@ export default function AppointmentCard({
   const canDelete = isOwner || isAdmin || isAssignedDoctor;
 
   const canViewContact = isAdmin || (currentUser?.role === "DOCTOR" && isAssignedDoctor);
+
+  const authorizedComplete = isAdmin || isAssignedDoctor;
+  let canCompleted = false;
+  const now = new Date();
+  const appointmentDate = new Date(appointment.date);
+
+  if (
+    authorizedComplete &&
+    (appointment.status === "CONFIRMED" ||
+     appointment.status === "COMPLETED") &&
+    now >= appointmentDate
+  ) {
+    canCompleted = true;
+  }
 
   const handleDeleteClick = () => {
     if (!canDelete) {
@@ -153,6 +169,21 @@ export default function AppointmentCard({
         >
           {canDelete ? <Trash2 className="h-4 w-4" /> : <Ban className="h-4 w-4" />}
         </Button>
+
+        {canCompleted && (
+          appointment.status === "COMPLETED" ? (
+            <Button variant="ghost" disabled>
+              Concluído
+            </Button>
+          ) : (
+            <Button
+              variant="default"
+              onClick={() => onComplete(appointment)}
+            >
+              Finalizar atendimento
+            </Button>
+          )
+        )}
       </div>
     </div>
   );
