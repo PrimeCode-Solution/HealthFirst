@@ -25,7 +25,7 @@ const registerSchema = z
   .object({
     name: z.string().min(3, "O nome deve ter pelo menos 3 caracteres"),
     email: z.string().email("Insira um e-mail válido"),
-    phone: z.string().min(10, "Insira um telefone válido").optional().or(z.literal("")),
+    phone: z.string().min(1, "O telefone é obrigatório").regex(/^\(?\d{2}\)?\s?\d{4,5}-?\d{4}$/, "Número de WhatsApp inválido"),
     password: z.string().min(6, "A senha deve ter no mínimo 6 caracteres"),
     confirmPassword: z.string(),
   })
@@ -35,6 +35,14 @@ const registerSchema = z
   });
 
 type RegisterFormValues = z.infer<typeof registerSchema>;
+
+const formatPhone = (value: string) => {
+  const numbers = value.replace(/\D/g, "");
+  if (numbers.length <= 2) return numbers;
+  if (numbers.length <= 6) return `(${numbers.slice(0, 2)}) ${numbers.slice(2)}`;
+  if (numbers.length <= 10) return `(${numbers.slice(0, 2)}) ${numbers.slice(2, 6)}-${numbers.slice(6)}`;
+  return `(${numbers.slice(0, 2)}) ${numbers.slice(2, 7)}-${numbers.slice(7, 11)}`;
+};
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -163,9 +171,19 @@ export default function RegisterPage() {
                 name="phone"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Telefone (Opcional)</FormLabel>
+                    <FormLabel className="inline-flex items-center gap-0.5">
+                      WhatsApp<span className="text-red-500">*</span>
+                    </FormLabel>
                     <FormControl>
-                      <Input placeholder="(82) 99999-9999" {...field} />
+                      <Input 
+                        placeholder="(82) 99999-9999" 
+                        {...field}
+                        onChange={(e) => {
+                          const formatted = formatPhone(e.target.value);
+                          field.onChange(formatted);
+                        }}
+                        maxLength={15}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
