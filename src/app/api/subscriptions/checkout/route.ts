@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
 
     // Fallback de e-mail para Sandbox (para não dar erro de mesmo comprador/vendedor)
     const payerEmail = process.env.NODE_ENV === 'production' 
-        ? session.user.email 
+        ? session.user.email ?? `no-email-${Date.now()}@example.com`
         : `sub_test_${Date.now()}@test.com`;
 
     // 1. Criar Assinatura no MP
@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
           transaction_amount: Number(price),
           currency_id: "BRL"
         },
-        back_url: `${getBaseUrl()}/dashboard/conteudo`,
+        back_url: `${getBaseUrl()}/dashboard/assinatura/processando`,
         payer_email: payerEmail,
         external_reference: session.user.id,
         status: "pending"

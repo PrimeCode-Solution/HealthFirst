@@ -1,3 +1,4 @@
+
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/providers/prisma";
 import { getServerSession } from "next-auth";
@@ -60,13 +61,41 @@ export async function GET(
       );
     }
 
-    if (!user.subscription?.preapprovalId) {
+    const subscription = user.subscription;
+
+    // Se não tem assinatura cadastrada, não tem acesso
+    if (!subscription?.preapprovalId) {
       return NextResponse.json({ hasAccess: false });
     }
 
-    const hasAccess = await checkSubscriptionStatusMP(
-      user.subscription.preapprovalId,
-    );
+    // Diferença entre agora e o updatedAt da assinatura
+    const now = new Date();
+    const updatedAt = subscription.updatedAt ?? subscription.createdAt;
+    const diffMs = now.getTime() - updatedAt.getTime();
+    const diffHours = diffMs / (1000 * 60 * 60);
+
+    let currentStatus = subscription.status;
+
+    // Se passar de 24h, confirma status com Mercado Pago
+    let mpStatus: boolean | null = null;
+    if (diffHours >= 24) {
+      mpStatus = await checkSubscriptionStatusMP(subscription.preapprovalId);
+    }
+
+    if (mpStatus) {
+      if (currentStatus !== "authorized") {
+        await prisma.subscription.update({
+          where: { id: subscription.id },
+          data: {
+            status: "authorized",
+            updatedAt: new Date(),
+          },
+        });
+        currentStatus = "authorized";
+      }
+    }
+
+    const hasAccess = currentStatus === "authorized";
 
     return NextResponse.json({ hasAccess });
   } catch (error) {
