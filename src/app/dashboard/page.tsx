@@ -2,10 +2,9 @@
 
 import { useSession } from "next-auth/react";
 import { AdminDashboard } from "@/components/dashboard/admin-dashboard";
+import { DoctorDashboard } from "@/components/dashboard/doctor-dashboard";
+import { PatientDashboard } from "@/components/dashboard/patient-dashboard";
 import { Loader2 } from "lucide-react";
-
-// Importe seus componentes de Paciente/Médico existentes aqui, se houver
-// import PatientDashboard from "@/components/dashboard/patient-dashboard"; 
 
 export default function DashboardPage() {
   const { data: session, status } = useSession();
@@ -20,20 +19,15 @@ export default function DashboardPage() {
 
   if (!session) return null;
 
-  // Renderiza o Dashboard conforme o cargo
-  if (session.user.role === "ADMIN") {
-    return <AdminDashboard />;
+  switch (session.user.role) {
+      case "ADMIN":
+          return <AdminDashboard />;
+      case "DOCTOR":
+          return <DoctorDashboard />
+      case "USER":
+          return <PatientDashboard />
+      default:
+          return <div>Role de usuário inválida!</div>;
   }
 
-  // Fallback para Pacientes/Médicos (pode manter o código antigo aqui ou criar componentes separados)
-  return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold mb-4">Bem-vindo, {session.user.name}</h1>
-      <p className="text-muted-foreground">
-        {session.user.role === "DOCTOR" 
-          ? "Acesse a aba 'Agendamentos' para gerenciar suas consultas."
-          : "Utilize o menu lateral para agendar consultas ou visualizar seus exames."}
-      </p>
-    </div>
-  );
 }
