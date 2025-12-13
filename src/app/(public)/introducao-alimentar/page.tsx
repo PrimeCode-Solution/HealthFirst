@@ -1,6 +1,7 @@
 import React from 'react';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button'; 
+import { EbookList } from '@/components/ebook-list';
 
 export default function IntroducaoAlimentar () {
   return (
@@ -119,6 +120,8 @@ export default function IntroducaoAlimentar () {
                 <h3 className="font-manrope text-[#0D1C14] font-medium text-lg mb-2">
                   E-books exclusivos
                 </h3>
+                <EbookList categoryName='Introdução Alimentar' />
+                
                 <p className="font-manrope text-[#598c75] text-sm">
                   Baixe e-books exclusivos com informações detalhadas.
                 </p>
