@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import Link from "next/link";
+import { FormattedAppointments } from "@/app/api/dashboard/stats/route";
 
 export function PatientDashboard() {
   const { data, isLoading } = useQuery({
@@ -90,7 +91,7 @@ export function PatientDashboard() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {recentAppointments.map((item: any) => (
+            {recentAppointments.map((item: FormattedAppointments) => (
               <TableRow key={item.id}>
                 <TableCell>{item.formattedDate}</TableCell>
                 <TableCell>{item.formattedTime}</TableCell>
@@ -116,7 +117,7 @@ export function PatientDashboard() {
   </Card>
 
   <div className="pt-4 flex justify-center sm:justify-start">
-    <Link href="/dashboard/agendamentos" className="w-full sm:w-auto">
+    <Link href="/agendar-consulta" className="w-full sm:w-auto">
       <Button className="w-full sm:w-auto">Agendar Nova Consulta</Button>
     </Link>
   </div>

@@ -4,6 +4,21 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-config";
 import { subMonths, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { AppointmentStatus } from "@/generated/prisma";
+
+export interface AppointmentBase {
+  id: string;
+  date: Date;
+  startTime: string;
+  endTime: string;
+  patientName: string;
+  status: AppointmentStatus;
+}
+
+export interface FormattedAppointments extends AppointmentBase {
+  formattedDate: string;
+  formattedTime: string;
+}
 
 export async function GET() {
   try {
@@ -175,11 +190,11 @@ async function getDoctorStats(doctorId: string) {
 }),
   ]);
 
-  const normalize = (apt: any) => ({
-    ...apt,
-    formattedDate: format(apt.date, "dd/MM/yyyy", { locale: ptBR }),
-    formattedTime: `${apt.startTime} - ${apt.endTime}`,
-  });
+  const normalize = (apt: AppointmentBase): FormattedAppointments => ({
+  ...apt,
+  formattedDate: format(apt.date, "dd/MM/yyyy", { locale: ptBR }),
+  formattedTime: `${apt.startTime} - ${apt.endTime}`,
+});
 
   const todaysAppointments = todaysAppointmentsRaw.map(normalize);
   const upcomingAppointments = upcomingAppointmentsRaw.map(normalize);
@@ -205,9 +220,12 @@ export async function getUserStats(userId: string) {
       where: { userId, date: { gte: now } },
       orderBy: { date: "asc" },
       select: {
+        id: true,
         date: true,
         startTime: true,
         endTime: true,
+        patientName: true,
+        status: true,
       },
     }),
 
@@ -216,22 +234,28 @@ export async function getUserStats(userId: string) {
       orderBy: { date: "desc" },
       take: 8,
       select: {
+        id: true,
         date: true,
         startTime: true,
         endTime: true,
+        patientName: true,
         status: true,
       },
     }),
   ]);
 
-  const formatAppointment = (apt: any) => ({
-    ...apt,
-    formattedDate: format(apt.date, "dd/MM/yyyy", { locale: ptBR }),
-    formattedTime: `${apt.startTime} - ${apt.endTime}`,
-  });
+  const formatAppointment = (
+  apt: AppointmentBase
+): FormattedAppointments => ({
+  ...apt,
+  formattedDate: format(apt.date, "dd/MM/yyyy", { locale: ptBR }),
+  formattedTime: `${apt.startTime} - ${apt.endTime}`,
+});
 
-  const nextAppointment = nextAppointmentRaw ? formatAppointment(nextAppointmentRaw) : null;
-  const recentAppointments = historyRaw.map(formatAppointment);
+  const nextAppointment: FormattedAppointments | null =
+  nextAppointmentRaw ? formatAppointment(nextAppointmentRaw) : null;
+  const recentAppointments: FormattedAppointments[] =
+  historyRaw.map(formatAppointment);
   const confirmedAppointmentsCount = historyRaw.filter(a => a.status === "CONFIRMED").length;
   const cancelledAppointmentsCount = historyRaw.filter(a => a.status === "CANCELLED").length;
 

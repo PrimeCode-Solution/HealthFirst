@@ -23,13 +23,7 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
-
-export function formatIsoToBr(dateIso: string) {
-  const date = new Date(dateIso);
-  return format(date, "dd/MM/yyyy", { locale: ptBR });
-}
+import { FormattedAppointments } from "@/app/api/dashboard/stats/route";
 
 export function DoctorDashboard() {
 
@@ -126,10 +120,10 @@ export function DoctorDashboard() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {upcoming.map((apt: any) => (
+                {upcoming.map((apt: FormattedAppointments) => (
                   <TableRow key={apt.id}>
                     <TableCell>{apt.patientName}</TableCell>
-                    <TableCell>{formatIsoToBr(apt.date)}</TableCell>
+                    <TableCell>{apt.formattedDate}</TableCell>
                     <TableCell>{`${apt.startTime} - ${apt.endTime}`}</TableCell>
                     <TableCell>
                       <Badge variant={apt.status === "COMPLETED"
@@ -158,10 +152,10 @@ export function DoctorDashboard() {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {upcoming.map((apt: any) => (
+          {upcoming.map((apt: FormattedAppointments) => (
             <TableRow key={apt.id}>
               <TableCell>{apt.patientName}</TableCell>
-              <TableCell>{formatIsoToBr(apt.date)}</TableCell>
+              <TableCell>{apt.formattedDate}</TableCell>
               <TableCell>{`${apt.startTime} - ${apt.endTime}`}</TableCell>
               <TableCell>
                 <Badge variant={apt.status === "COMPLETED"
@@ -185,14 +179,14 @@ export function DoctorDashboard() {
 
     <CardContent>
       <div className="space-y-3">
-        {recent.map((item: any) => (
+        {recent.map((item: FormattedAppointments) => (
           <div
             key={item.id}
             className="flex flex-col sm:flex-row sm:items-center justify-between border p-3 rounded-xl"
           >
             <div>
               <p className="font-medium">{item.patientName}</p>
-              <p className="text-sm text-muted-foreground">{formatIsoToBr(item.date)}</p>
+              <p className="text-sm text-muted-foreground">{item.formattedDate}</p>
             </div>
 
             <Badge

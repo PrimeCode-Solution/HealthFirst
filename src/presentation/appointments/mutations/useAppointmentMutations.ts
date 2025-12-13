@@ -56,6 +56,22 @@ export const useCancelAppointmentMutation = (id: string) => {
   });
 }
 
+export const useCompleteAppointmentMutation = () => {
+  const queryClient = useQueryClient();
+
+    return useMutation({
+    mutationFn: (data: UpdateAppointmentStatusDTO) =>
+      appointmentService.updateAppointmentStatus(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["appointments"] });
+      toast.success("Status do agendamento atualizado com sucesso!");
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Erro ao atualizar status do agendamento!");
+    },
+  });
+};
+
 export const useRescheduleAppointmentMutation = () => {
   const queryClient = useQueryClient();
 
