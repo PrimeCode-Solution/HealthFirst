@@ -4,7 +4,11 @@ import React, { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useSession } from "next-auth/react"; 
+import {useSession} from "next-auth/react";
+
+import { usePremiumAccess } from "@/hooks/usePremiumAccess";
+import { Skeleton} from "@/components/ui/skeleton";
+import {Alert, AlertTitle, AlertDescription} from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -80,6 +84,7 @@ const categories = [
   "Cardiologia",
 ];
 
+// Schema de validação com Zod
 const baseEbookSchema = z.object({
   title: z
     .string()
@@ -118,7 +123,7 @@ const createEbookFormSchema = baseEbookSchema
   .refine(validatePrice, {
     message: "Preço é obrigatório para conteúdo pago",
     path: ["price"],
-  });
+});
 
 type EbookFormData = z.infer<typeof ebookFormSchema>;
 
@@ -151,13 +156,16 @@ const mockEbooks: Ebook[] = [
 ];
 
 export default function ConteudoPage() {
-  const { data: session } = useSession();
-  const isAdmin = session?.user?.role === "ADMIN";
-  
+  const {data: session} = useSession();
+  const userId = (session as any)?.user?.id as string | undefined;
+  const isAdmin = (session as any)?.user?.role === "ADMIN";
+
+  const { hasAccess, loading} = usePremiumAccess(userId);
   const [ebooks, setEbooks] = useState<Ebook[]>(mockEbooks);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingEbook, setEditingEbook] = useState<Ebook | null>(null);
 
+  
   const form = useForm<EbookFormData>({
     resolver: zodResolver(
       editingEbook ? ebookFormSchema : createEbookFormSchema,
@@ -183,6 +191,12 @@ export default function ConteudoPage() {
   };
 
   const handleSubmit = (data: EbookFormData) => {
+    
+    if (!editingEbook && !data.ebookFile) {
+      toast.error("Arquivo do ebook é obrigatório para novos ebooks");
+      return;
+    }
+
     const newEbook: Ebook = {
       id: editingEbook?.id || Date.now().toString(),
       title: data.title,
@@ -214,6 +228,8 @@ export default function ConteudoPage() {
 
   const handleEdit = (ebook: Ebook) => {
     setEditingEbook(ebook);
+
+    
     setValue("title", ebook.title);
     setValue("description", ebook.description);
     setValue("category", ebook.category);
@@ -228,8 +244,31 @@ export default function ConteudoPage() {
     toast.success("Ebook removido com sucesso!");
   };
 
+  if (loading){
+    return(
+      <div className="p-4">
+        <Skeleton className="mb-4 h-8 w-64" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    );
+  }
+
+  if(!hasAccess){
+    return(
+      <div className="p-4">
+        <Alert variant="destructive">
+          <AlertTitle>Acesso Negado</AlertTitle>
+          <AlertDescription>
+            Sua assinatura não está ativa no momento. Atualize o pagamento para continuar usando o painel.
+          </AlertDescription>
+        </Alert>
+      </div>
+    )
+  }
+
   return (
     <div className="flex">
+    
       <div className="flex-1">
         <div className="">
           <div className="flex flex-col items-center justify-between gap-2 sm:flex-row">
@@ -559,6 +598,7 @@ export default function ConteudoPage() {
               <CardTitle>Ebooks Cadastrados</CardTitle>
             </CardHeader>
             <CardContent className="border-0 p-0">
+              
               <div className="hidden md:block">
                 <Table>
                   <TableHeader>
@@ -633,6 +673,7 @@ export default function ConteudoPage() {
                 </Table>
               </div>
 
+              
               <div className="space-y-4 md:hidden">
                 {ebooks.map((ebook) => (
                   <Card

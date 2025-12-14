@@ -68,30 +68,30 @@ export async function GET(
       return NextResponse.json({ hasAccess: false });
     }
 
-    // Diferença entre agora e o updatedAt da assinatura
+    let currentStatus = subscription.status;
+
     const now = new Date();
     const updatedAt = subscription.updatedAt ?? subscription.createdAt;
     const diffMs = now.getTime() - updatedAt.getTime();
     const diffHours = diffMs / (1000 * 60 * 60);
 
-    let currentStatus = subscription.status;
-
     // Se passar de 24h, confirma status com Mercado Pago
-    let mpStatus: boolean | null = null;
     if (diffHours >= 24) {
-      mpStatus = await checkSubscriptionStatusMP(subscription.preapprovalId);
-    }
+      const isActiveInMP = await checkSubscriptionStatusMP(subscription.preapprovalId);
 
-    if (mpStatus) {
-      if (currentStatus !== "authorized") {
+      const newStatus = isActiveInMP ? "authorized" : "cancelled";
+
+      // Só atualiza o banco se o status tiver mudado
+      if (currentStatus !== newStatus) {
         await prisma.subscription.update({
           where: { id: subscription.id },
           data: {
-            status: "authorized",
+            status: newStatus,
             updatedAt: new Date(),
           },
         });
-        currentStatus = "authorized";
+
+        currentStatus = newStatus;
       }
     }
 
