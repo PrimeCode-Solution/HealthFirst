@@ -3,6 +3,7 @@ import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import Image from "next/image";
 import Link from "next/link";
+import { DashboardBreadcrumbs } from "@/components/dashboard-breadcrumbs";
 
 export function DashboardHeader() {
   return (
@@ -13,7 +14,7 @@ export function DashboardHeader() {
           orientation="vertical"
           className="mx-2 data-[orientation=vertical]:h-4"
         />
-        <h1 className="text-base font-medium">Dashboard</h1>
+        <DashboardBreadcrumbs />
         <div className="ml-auto flex items-center gap-2">
           <Link href="/">
             <Image

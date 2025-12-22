@@ -1,14 +1,9 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { 
-    Card, 
-    CardContent, 
-    CardHeader, 
-    CardTitle } from "@/components/ui/card";
-import { AlertTriangle } from "lucide-react";
-import Link from "next/link";
 import { useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { AlertTriangle, RefreshCcw } from "lucide-react";
+import Link from "next/link";
 
 export default function Error({
   error,
@@ -18,45 +13,43 @@ export default function Error({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error(error);
+    console.error("Erro capturado no cliente:", error);
   }, [error]);
 
   return (
-    <div className="flex min-h-[60vh] items-center justify-center px-4">
-      <Card className="w-full max-w-md border-destructive/20 text-center shadow-lg">
-        <CardHeader className="flex flex-col items-center pb-2">
-          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-100">
-            <AlertTriangle className="h-8 w-8 text-destructive" />
-          </div>
-          <CardTitle className="text-xl font-bold text-destructive">
-            Algo deu errado
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            Encontramos um erro inesperado ao processar sua solicitação. Tente
-            novamente ou contate o suporte.
+    <div className="flex h-screen w-full flex-col items-center justify-center bg-background p-4">
+      <div className="flex max-w-md flex-col items-center text-center space-y-6">
+        <div className="flex h-20 w-20 items-center justify-center rounded-full bg-yellow-500/10">
+          <AlertTriangle className="h-10 w-10 text-yellow-600 dark:text-yellow-500" />
+        </div>
+
+        <div className="space-y-2">
+          <h1 className="text-3xl font-bold tracking-tighter sm:text-4xl">
+            Ops! Algo deu errado.
+          </h1>
+          <p className="text-muted-foreground text-lg">
+            Não foi possível processar sua solicitação no momento. Nossos engenheiros já foram notificados.
           </p>
+        </div>
 
-          <div className="flex flex-col gap-3 pt-2">
-            <Button
-              onClick={() => reset()}
-              className="w-full bg-destructive text-white hover:bg-destructive/90"
-            >
-              Tentar Novamente
-            </Button>
-
-            <div className="grid grid-cols-2 gap-3">
-              <Button variant="outline" asChild className="w-full">
-                <Link href="/">Ir para o Início</Link>
-              </Button>
-              <Button variant="outline" asChild className="w-full">
-                <Link href="/contato">Suporte</Link>
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+        <div className="flex flex-col gap-2 min-[400px]:flex-row">
+          <Button onClick={() => reset()} variant="default" size="lg" className="gap-2">
+            <RefreshCcw className="h-4 w-4" />
+            Tentar Novamente
+          </Button>
+          <Button asChild variant="ghost" size="lg">
+            <Link href="/dashboard">
+              Voltar ao Início
+            </Link>
+          </Button>
+        </div>
+        
+        {error.digest && (
+          <p className="text-xs text-muted-foreground mt-4">
+            Código do erro: {error.digest}
+          </p>
+        )}
+      </div>
     </div>
   );
 }
