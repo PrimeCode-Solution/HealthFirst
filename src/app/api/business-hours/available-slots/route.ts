@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { PrismaClient } from "@/generated/prisma";
+import { prisma } from "@/app/providers/prisma"; 
 import { addMinutes, format, isWithinInterval, parse } from "date-fns";
 
-const prisma = new PrismaClient();
+export const dynamic = "force-dynamic"; 
 
 export async function GET(request: NextRequest) {
   try {
-    const dateParameter = request.nextUrl.searchParams.get("date");
-    const doctorId = request.nextUrl.searchParams.get("doctorId");
+    const { searchParams } = new URL(request.url);
+    const dateParameter = searchParams.get("date");
+    const doctorId = searchParams.get("doctorId");
 
     if (!dateParameter) {
       return NextResponse.json({ error: "Date not Provided" }, { status: 400 });
@@ -18,6 +19,10 @@ export async function GET(request: NextRequest) {
     }
 
     const date = new Date(dateParameter);
+    if (isNaN(date.getTime())) {
+      return NextResponse.json({ error: "Invalid Date" }, { status: 400 });
+    }
+
     const dayOfWeek = date.getDay();
 
     const configurations = await prisma.businessHours.findUnique({
@@ -56,10 +61,12 @@ export async function GET(request: NextRequest) {
         configurations.lunchStartTime &&
         configurations.lunchEndTime
       ) {
-        isLunch = isWithinInterval(current, {
-          start: parse(configurations.lunchStartTime, "HH:mm", date),
-          end: parse(configurations.lunchEndTime, "HH:mm", date)
-        });
+        const lunchStart = parse(configurations.lunchStartTime, "HH:mm", date);
+        const lunchEnd = parse(configurations.lunchEndTime, "HH:mm", date);
+        
+        if (current >= lunchStart && current < lunchEnd) {
+            isLunch = true;
+        }
       }
 
       if (!isLunch) {
@@ -90,6 +97,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(availableTimes, { status: 200 });
   } catch (err) {
+    console.error("Available Slots Error:", err);
     return NextResponse.json({ error: "Internal Error" }, { status: 500 });
   }
 }

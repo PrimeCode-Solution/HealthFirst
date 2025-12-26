@@ -7,6 +7,8 @@ import { AppointmentStatus, ConsultationType, PaymentStatus } from "@/generated/
 import { parseISO, isValid as isValidDate, startOfDay, endOfDay } from "date-fns";
 import { z } from "zod";
 
+export const dynamic = "force-dynamic";
+
 // --- Configuração do Mercado Pago ---
 const mpAccessToken = process.env.MERCADO_PAGO_ACCESS_TOKEN || process.env.MP_ACCESS_TOKEN;
 const client = new MercadoPagoConfig({ 

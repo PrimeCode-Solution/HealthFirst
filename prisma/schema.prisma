@@ -65,6 +65,10 @@ model User {
   phone     String
   password  String   // Senha criptografada (hash)
   role      UserRole @default(USER)
+
+  // Campos novos para recuperação de senha
+  resetPasswordToken   String?   @unique
+  resetPasswordExpires DateTime?
   
   // Timestamps
   createdAt DateTime @default(now())

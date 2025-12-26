@@ -121,7 +121,7 @@ function LoginFormContent() {
                 <FormItem>
                   <div className="flex items-center justify-between">
                     <FormLabel>Senha</FormLabel>
-                    <Link href="#" className="text-xs font-medium text-primary hover:underline">
+                    <Link href="/forgot-password" className="text-xs font-medium text-primary hover:underline">
                       Esqueceu a senha?
                     </Link>
                   </div>
