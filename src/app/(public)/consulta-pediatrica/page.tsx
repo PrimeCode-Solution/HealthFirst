@@ -3,6 +3,7 @@ import { Card }  from '@/components/ui/card';
 import { Stethoscope, Baby, Heart } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { EbookList } from '@/components/ebook-list';
 
 export default function ConsutaPediatricaPage() {
     return (
@@ -160,6 +161,13 @@ export default function ConsutaPediatricaPage() {
                 Marcar consulta
             </Link>
 
+        </div>
+            {/* E-books de Pediatria */}
+        <div className="mt-8">
+          <h2 className="mb-4 text-2xl font-bold tracking-tight text-gray-900">
+            E-books sobre Pediatria
+          </h2>
+          <EbookList categoryName="Pediatria" />
         </div>
         </section>
         </div>
