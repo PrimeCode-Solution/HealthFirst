@@ -217,8 +217,8 @@ export async function POST(req: NextRequest) {
               currency_id: "BRL",
             }],
             payer: {
-              email: session.user.email, 
-              name: session.user.name,
+              email: session.user.email || undefined, 
+              name: session.user.name || undefined,
             },
             back_urls: {
               success: `${baseUrl}/success?payment_id=${payment.id}`,

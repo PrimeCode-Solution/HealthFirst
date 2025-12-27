@@ -26,7 +26,7 @@ export type CreateAppointmentType = z.infer<typeof CreateAppointmentSchema>;
 export function CreateAppointmentForm() {
   const { data: session } = useSession();
   
-  const form = useForm<CreateAppointmentType>({
+  const form = useForm({
     resolver: zodResolver(CreateAppointmentSchema),
     defaultValues: {
       userId: "",
@@ -50,6 +50,8 @@ export function CreateAppointmentForm() {
     const finalData = {
       ...data,
       date: data.date.toISOString(),
+      
+      userId: data.userId || session?.user.id || "",
 
       doctorId:
         data.doctorId && data.doctorId.trim() !== ""

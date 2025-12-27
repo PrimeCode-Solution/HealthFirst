@@ -1,8 +1,8 @@
-
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/providers/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-config";
+import { SubscriptionStatus } from "@/generated/prisma";
 
 async function checkSubscriptionStatusMP(
   preapprovalId: string,
@@ -79,7 +79,7 @@ export async function GET(
     if (diffHours >= 24) {
       const isActiveInMP = await checkSubscriptionStatusMP(subscription.preapprovalId);
 
-      const newStatus = isActiveInMP ? "authorized" : "cancelled";
+      const newStatus = isActiveInMP ? SubscriptionStatus.ACTIVE : SubscriptionStatus.CANCELLED;
 
       // Só atualiza o banco se o status tiver mudado
       if (currentStatus !== newStatus) {
@@ -95,7 +95,7 @@ export async function GET(
       }
     }
 
-    const hasAccess = currentStatus === "authorized";
+    const hasAccess = currentStatus === SubscriptionStatus.ACTIVE;
 
     return NextResponse.json({ hasAccess });
   } catch (error) {

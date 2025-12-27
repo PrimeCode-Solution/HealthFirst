@@ -15,9 +15,9 @@ export interface Appointment {
   notes?: string;
 }
 
-export interface CreateAppointmentDTO{
+export interface CreateAppointmentDTO {
     userId: string;
-    date: Date;
+    date: Date | string; 
     startTime: string;
     endTime: string;
     type: ConsultationType;
@@ -25,16 +25,12 @@ export interface CreateAppointmentDTO{
     patientEmail?: string;
     patientPhone?: string;
     notes?: string;
+    doctorId?: string | null;
+    amount?: number;
+    description?: string;
 }
 
-export interface UpdateAppointmentStatusDTO{
+export interface UpdateAppointmentStatusDTO {
     id: string;
     status: AppointmentStatus;
 }
-
-
-
-
-
-
-

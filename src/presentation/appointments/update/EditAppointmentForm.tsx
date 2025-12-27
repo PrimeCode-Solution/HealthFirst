@@ -14,7 +14,6 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Loader2, Save } from "lucide-react";
 
@@ -35,7 +34,7 @@ type EditAppointmentType = z.infer<typeof EditAppointmentSchema>;
 export function EditAppointmentForm({ appointment, onSuccess }: { appointment: any, onSuccess: () => void }) {
   const editMutation = useEditAppointmentMutation();
 
-  const form = useForm<EditAppointmentType>({
+  const form = useForm({
     resolver: zodResolver(EditAppointmentSchema),
     defaultValues: {
       date: new Date(appointment.date),
