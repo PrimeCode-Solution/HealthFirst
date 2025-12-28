@@ -25,6 +25,7 @@ export default function TransparentPaymentForm({ amount, appointmentId, userEmai
         },
     };
 
+    // CORREÇÃO: Adicionado 'as const' para garantir que "all" seja tratado como literal e não string genérica
     const customization = {
         paymentMethods: {
             ticket: "all",
@@ -33,10 +34,10 @@ export default function TransparentPaymentForm({ amount, appointmentId, userEmai
             debitCard: "all",
             mercadoPago: "all",
         },
-    };
+    } as const;
 
     const onSubmit = async ({ formData }: any) => {
-        return new Promise((resolve, reject) => {
+        return new Promise<void>((resolve, reject) => {
             fetch("/api/payments/process", {
                 method: "POST",
                 headers: {

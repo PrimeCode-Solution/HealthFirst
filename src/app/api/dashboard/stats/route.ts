@@ -32,17 +32,17 @@ export async function GET() {
     const userId = session.user.id;
 
     switch (role) {
-        case "ADMIN":
-            return NextResponse.json(await getAdminStats());
-        case "DOCTOR":
-            return NextResponse.json(await getDoctorStats(userId));
-        case "USER":
-            return NextResponse.json(await getUserStats(userId));
-        default:
-            return NextResponse.json(
-                { error: "Role não suportada!" },
-                { status: 403 }
-            );
+      case "ADMIN":
+        return NextResponse.json(await getAdminStats());
+      case "DOCTOR":
+        return NextResponse.json(await getDoctorStats(userId));
+      case "USER":
+        return NextResponse.json(await getUserStats(userId));
+      default:
+        return NextResponse.json(
+          { error: "Role não suportada!" },
+          { status: 403 }
+        );
     }
   } catch (error) {
     console.error("Erro ao carregar stats do dashboard:", error);
@@ -53,7 +53,6 @@ export async function GET() {
   }
 }
 
-//FUNÇÃO PARA RETORNO PRO ADMIN
 async function getAdminStats() {
   const now = new Date();
   const sixMonthsAgo = subMonths(now, 6);
@@ -110,7 +109,6 @@ async function getAdminStats() {
   };
 }
 
-//FUNÇÃO PARA RETORNO PRO DOUTOR
 async function getDoctorStats(doctorId: string) {
   const now = new Date();
 
@@ -165,36 +163,36 @@ async function getDoctorStats(doctorId: string) {
     }),
 
     prisma.appointment.findMany({
-    where: {
-    doctorId,
-    OR: [
-      { date: { lt: now } },
-      {
-        AND: [
-          { date: { equals: new Date(now.getFullYear(), now.getMonth(), now.getDate()) } },
-          { endTime: { lt: `${now.getHours()}:${String(now.getMinutes()).padStart(2, "0")}` } }
+      where: {
+        doctorId,
+        OR: [
+          { date: { lt: now } },
+          {
+            AND: [
+              { date: { equals: new Date(now.getFullYear(), now.getMonth(), now.getDate()) } },
+              { endTime: { lt: `${now.getHours()}:${String(now.getMinutes()).padStart(2, "0")}` } }
+            ],
+          },
         ],
       },
-    ],
-  },
-  orderBy: { date: "desc" },
-  take: 5,
-  select: {
-    id: true,
-    date: true,
-    startTime: true,
-    endTime: true,
-    patientName: true,
-    status: true,
-  },
-}),
+      orderBy: { date: "desc" },
+      take: 5,
+      select: {
+        id: true,
+        date: true,
+        startTime: true,
+        endTime: true,
+        patientName: true,
+        status: true,
+      },
+    }),
   ]);
 
   const normalize = (apt: AppointmentBase): FormattedAppointments => ({
-  ...apt,
-  formattedDate: format(apt.date, "dd/MM/yyyy", { locale: ptBR }),
-  formattedTime: `${apt.startTime} - ${apt.endTime}`,
-});
+    ...apt,
+    formattedDate: format(apt.date, "dd/MM/yyyy", { locale: ptBR }),
+    formattedTime: `${apt.startTime} - ${apt.endTime}`,
+  });
 
   const todaysAppointments = todaysAppointmentsRaw.map(normalize);
   const upcomingAppointments = upcomingAppointmentsRaw.map(normalize);
@@ -211,8 +209,7 @@ async function getDoctorStats(doctorId: string) {
   };
 }
 
-//FUNÇÃO PARA RETORNO PRO USUARIO
-export async function getUserStats(userId: string) {
+async function getUserStats(userId: string) {
   const now = new Date();
 
   const [nextAppointmentRaw, historyRaw] = await Promise.all([
@@ -245,17 +242,17 @@ export async function getUserStats(userId: string) {
   ]);
 
   const formatAppointment = (
-  apt: AppointmentBase
-): FormattedAppointments => ({
-  ...apt,
-  formattedDate: format(apt.date, "dd/MM/yyyy", { locale: ptBR }),
-  formattedTime: `${apt.startTime} - ${apt.endTime}`,
-});
+    apt: AppointmentBase
+  ): FormattedAppointments => ({
+    ...apt,
+    formattedDate: format(apt.date, "dd/MM/yyyy", { locale: ptBR }),
+    formattedTime: `${apt.startTime} - ${apt.endTime}`,
+  });
 
   const nextAppointment: FormattedAppointments | null =
-  nextAppointmentRaw ? formatAppointment(nextAppointmentRaw) : null;
+    nextAppointmentRaw ? formatAppointment(nextAppointmentRaw) : null;
   const recentAppointments: FormattedAppointments[] =
-  historyRaw.map(formatAppointment);
+    historyRaw.map(formatAppointment);
   const confirmedAppointmentsCount = historyRaw.filter(a => a.status === "CONFIRMED").length;
   const cancelledAppointmentsCount = historyRaw.filter(a => a.status === "CANCELLED").length;
 

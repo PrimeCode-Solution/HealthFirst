@@ -51,7 +51,7 @@ export function TransparentSubscriptionForm({
         ? userEmail 
         : "cliente_sem_email@healthfirst.com";
 
-      const mp = new window.MercadoPago(mpPublicKey, {
+      const mp = new (window as any).MercadoPago(mpPublicKey, {
         locale: "pt-BR",
       });
 

@@ -51,7 +51,7 @@ export async function POST(req: Request) {
 
   } catch (error: any) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ message: "Dados inválidos.", errors: error.errors }, { status: 400 });
+      return NextResponse.json({ message: "Dados inválidos.", errors: error.issues }, { status: 400 });
     }
     return NextResponse.json(
       { message: "Erro interno ao criar conta." },
