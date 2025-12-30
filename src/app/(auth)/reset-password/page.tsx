@@ -1,198 +1,163 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { Loader2, Eye, EyeOff, CheckCircle2 } from "lucide-react";
-import { toast } from "sonner";
-import Link from "next/link";
-
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-
-// Schema com validação de confirmação de senha
-const resetPasswordSchema = z
-  .object({
-    password: z.string().min(6, "A senha deve ter no mínimo 6 caracteres"),
-    confirmPassword: z.string(),
-  })
-  .refine((data) => data.password === data.confirmPassword, {
-    message: "As senhas não coincidem",
-    path: ["confirmPassword"],
-  });
-
-type ResetPasswordValues = z.infer<typeof resetPasswordSchema>;
+import { Label } from "@/components/ui/label";
+import { Card, CardHeader, CardTitle, CardContent, CardFooter, CardDescription } from "@/components/ui/card";
+import { toast } from "sonner";
+import { Loader2, KeyRound, ArrowLeft } from "lucide-react";
 
 function ResetPasswordForm() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const token = searchParams.get("token");
-
+  
+  const [showTokenInput, setShowTokenInput] = useState(false);
+  const [token, setToken] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  const form = useForm<ResetPasswordValues>({
-    resolver: zodResolver(resetPasswordSchema),
-    defaultValues: {
-      password: "",
-      confirmPassword: "",
-    },
-  });
+  useEffect(() => {
+    const tokenFromUrl = searchParams.get("token");
+    if (tokenFromUrl) {
+      setToken(tokenFromUrl);
+      setShowTokenInput(false);
+    } else {
+      setShowTokenInput(true);
+    }
+  }, [searchParams]);
 
-  if (!token) {
-    return (
-      <Card className="w-full max-w-md border-red-200 bg-red-50">
-        <CardContent className="pt-6 text-center text-red-600">
-          <p>Link inválido ou expirado. Por favor, solicite uma nova recuperação.</p>
-          <Button variant="link" asChild className="mt-2 text-red-700">
-            <Link href="/forgot-password">Solicitar novamente</Link>
-          </Button>
-        </CardContent>
-      </Card>
-    );
-  }
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    
+    if (password !== confirmPassword) {
+      return toast.error("As senhas não coincidem");
+    }
 
-  async function onSubmit(data: ResetPasswordValues) {
+    if (!token || token.length < 6) {
+      return toast.error("Por favor, insira o código de 6 dígitos");
+    }
+
     setIsLoading(true);
+
     try {
       const response = await fetch("/api/auth/reset-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          token,
-          password: data.password,
-        }),
+        body: JSON.stringify({ token, password }),
       });
 
-      const result = await response.json();
+      const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error || "Erro ao redefinir senha");
+        throw new Error(data.error || "Código inválido ou expirado");
       }
 
       toast.success("Senha alterada com sucesso!");
       router.push("/login");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Erro ao redefinir senha.");
+    } catch (error: any) {
+      toast.error(error.message);
     } finally {
       setIsLoading(false);
     }
   }
 
   return (
-    <Card className="w-full max-w-md">
-      <CardHeader>
-        <CardTitle>Nova Senha</CardTitle>
-        <CardDescription>Crie uma nova senha para sua conta.</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="password"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Nova Senha</FormLabel>
-                  <div className="relative">
-                    <FormControl>
-                      <Input
-                        type={showPassword ? "text" : "password"}
-                        {...field}
-                      />
-                    </FormControl>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                      onClick={() => setShowPassword(!showPassword)}
-                    >
-                      {showPassword ? (
-                        <EyeOff className="h-4 w-4 text-gray-500" />
-                      ) : (
-                        <Eye className="h-4 w-4 text-gray-500" />
-                      )}
-                    </Button>
-                  </div>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="confirmPassword"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Confirmar Senha</FormLabel>
-                  <div className="relative">
-                    <FormControl>
-                      <Input
-                        type={showConfirmPassword ? "text" : "password"}
-                        {...field}
-                      />
-                    </FormControl>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    >
-                      {showConfirmPassword ? (
-                        <EyeOff className="h-4 w-4 text-gray-500" />
-                      ) : (
-                        <Eye className="h-4 w-4 text-gray-500" />
-                      )}
-                    </Button>
-                  </div>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <Button className="w-full" type="submit" disabled={isLoading}>
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Salvando...
-                </>
-              ) : (
-                "Redefinir Senha"
-              )}
+    <div className="flex min-h-[calc(100vh-80px)] items-center justify-center p-4">
+      <Card className="w-full max-w-md">
+        <CardHeader className="space-y-1">
+          <CardTitle className="text-2xl font-bold flex items-center gap-2">
+            <KeyRound className="w-6 h-6" />
+            Redefinir Senha
+          </CardTitle>
+          <CardDescription>
+            {showTokenInput 
+              ? "Digite o código de 6 dígitos enviado ao seu e-mail e sua nova senha." 
+              : "Defina sua nova senha de acesso abaixo."}
+          </CardDescription>
+        </CardHeader>
+        <form onSubmit={handleSubmit}>
+          <CardContent className="space-y-4">
+            {showTokenInput && (
+              <div className="space-y-2">
+                <Label htmlFor="token">Código de Verificação</Label>
+                <Input
+                  id="token"
+                  placeholder="Ex: 123456"
+                  value={token}
+                  onChange={(e) => setToken(e.target.value)}
+                  required
+                  maxLength={6}
+                  className="font-mono text-center tracking-widest text-lg"
+                />
+              </div>
+            )}
+            
+            <div className="space-y-2">
+              <Label htmlFor="password">Nova Senha</Label>
+              <Input
+                id="password"
+                type="password"
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword">Confirmar Nova Senha</Label>
+              <Input
+                id="confirmPassword"
+                type="password"
+                placeholder="••••••••"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+              />
+            </div>
+          </CardContent>
+          <CardFooter className="flex flex-col gap-4">
+            <Button type="submit" className="w-full" disabled={isLoading}>
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Salvar Nova Senha
             </Button>
-          </form>
-        </Form>
-      </CardContent>
-    </Card>
+            
+            {!showTokenInput && (
+              <Button 
+                type="button" 
+                variant="ghost" 
+                size="sm" 
+                className="text-muted-foreground w-full"
+                onClick={() => setShowTokenInput(true)}
+              >
+                Digitar código manualmente
+              </Button>
+            )}
+
+            <Button 
+              type="button" 
+              variant="link" 
+              size="sm" 
+              className="text-muted-foreground"
+              onClick={() => router.push("/login")}
+            >
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Voltar para o Login
+            </Button>
+          </CardFooter>
+        </form>
+      </Card>
+    </div>
   );
 }
 
 export default function ResetPasswordPage() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
-      <Suspense fallback={<Loader2 className="h-8 w-8 animate-spin text-primary" />}>
-        <ResetPasswordForm />
-      </Suspense>
-    </div>
+    <Suspense fallback={<div className="flex justify-center p-8"><Loader2 className="animate-spin" /></div>}>
+      <ResetPasswordForm />
+    </Suspense>
   );
 }

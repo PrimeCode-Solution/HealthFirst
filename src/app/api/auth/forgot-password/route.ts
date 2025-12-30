@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/providers/prisma"; 
 import { z } from "zod";
-import crypto from "crypto";
 import { sendPasswordResetEmail } from "@/lib/email";
 
 const forgotPasswordSchema = z.object({
@@ -17,17 +16,15 @@ export async function POST(request: Request) {
       where: { email },
     });
 
-
     if (!user) {
       return NextResponse.json(
-        { message: "Se o e-mail existir, você receberá um link de recuperação." },
+        { message: "Se o e-mail existir, você receberá instruções." },
         { status: 200 }
       );
     }
 
-    const resetToken = crypto.randomBytes(32).toString("hex");
+    const resetToken = Math.floor(100000 + Math.random() * 900000).toString();
     const passwordResetExpires = new Date(Date.now() + 3600000); 
-
 
     await prisma.user.update({
       where: { email },
@@ -40,16 +37,15 @@ export async function POST(request: Request) {
     await sendPasswordResetEmail(user.email, resetToken);
 
     return NextResponse.json(
-      { message: "E-mail de recuperação enviado com sucesso." },
+      { message: "E-mail enviado com sucesso." },
       { status: 200 }
     );
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: error.issues }, { status: 400 });
     }
-    console.error("Forgot Password Error:", error);
     return NextResponse.json(
-      { error: "Erro interno ao processar solicitação." },
+      { error: "Erro ao processar solicitação." },
       { status: 500 }
     );
   }

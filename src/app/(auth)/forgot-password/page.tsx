@@ -1,162 +1,89 @@
 "use client";
 
 import { useState } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import Link from "next/link";
-import { ArrowLeft, Loader2, Mail } from "lucide-react";
-import { toast } from "sonner";
-
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-
-// Schema de validação
-const forgotPasswordSchema = z.object({
-  email: z.string().email("Insira um e-mail válido"),
-});
-
-type ForgotPasswordValues = z.infer<typeof forgotPasswordSchema>;
+import { Label } from "@/components/ui/label";
+import { Card, CardHeader, CardTitle, CardContent, CardFooter, CardDescription } from "@/components/ui/card";
+import { toast } from "sonner";
+import { Loader2, Mail, ArrowLeft } from "lucide-react";
 
 export default function ForgotPasswordPage() {
+  const router = useRouter();
+  const [email, setEmail] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [isEmailSent, setIsEmailSent] = useState(false);
 
-  const form = useForm<ForgotPasswordValues>({
-    resolver: zodResolver(forgotPasswordSchema),
-    defaultValues: {
-      email: "",
-    },
-  });
-
-  async function onSubmit(data: ForgotPasswordValues) {
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
     setIsLoading(true);
+
     try {
       const response = await fetch("/api/auth/forgot-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify({ email }),
       });
 
-      const result = await response.json();
+      const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error || "Erro ao enviar e-mail");
+        throw new Error(data.error || "Erro ao processar solicitação");
       }
 
-      setIsEmailSent(true);
-      toast.success("E-mail enviado com sucesso!");
-    } catch (error) {
-      toast.error("Ocorreu um erro. Tente novamente mais tarde.");
-      console.error(error);
+      toast.success("Código enviado! Verifique seu e-mail.");
+      router.push("/reset-password");
+    } catch (error: any) {
+      toast.error(error.message);
     } finally {
       setIsLoading(false);
     }
   }
 
-  if (isEmailSent) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
-        <Card className="w-full max-w-md text-center">
-          <CardHeader>
-            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
-              <Mail className="h-6 w-6 text-green-600" />
-            </div>
-            <CardTitle>Verifique seu e-mail</CardTitle>
-            <CardDescription>
-              Enviamos um link de recuperação para{" "}
-              <span className="font-medium text-gray-900">
-                {form.getValues("email")}
-              </span>
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-gray-500">
-              Clique no link enviado para redefinir sua senha. Se não encontrar,
-              verifique sua caixa de spam.
-            </p>
-          </CardContent>
-          <CardFooter className="flex justify-center">
-            <Button variant="ghost" asChild>
-              <Link href="/login">
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                Voltar para o Login
-              </Link>
-            </Button>
-          </CardFooter>
-        </Card>
-      </div>
-    );
-  }
-
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
+    <div className="flex min-h-[calc(100vh-80px)] items-center justify-center p-4">
       <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle>Esqueceu sua senha?</CardTitle>
+        <CardHeader className="space-y-1">
+          <CardTitle className="text-2xl font-bold flex items-center gap-2">
+            <Mail className="w-6 h-6" />
+            Esqueci minha senha
+          </CardTitle>
           <CardDescription>
-            Digite seu e-mail abaixo e enviaremos um link para você redefinir
-            sua senha.
+            Digite seu e-mail para receber um código de 6 dígitos.
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>E-mail</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="seu@email.com"
-                        type="email"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+        <form onSubmit={handleSubmit}>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="email">E-mail cadastrado</Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="seu@email.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
               />
-              <Button className="w-full" type="submit" disabled={isLoading}>
-                {isLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Enviando...
-                  </>
-                ) : (
-                  "Enviar Link de Recuperação"
-                )}
-              </Button>
-            </form>
-          </Form>
-        </CardContent>
-        <CardFooter className="flex justify-center">
-          <Link
-            href="/login"
-            className="flex items-center text-sm text-gray-500 hover:text-gray-900"
-          >
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Voltar para o Login
-          </Link>
-        </CardFooter>
+            </div>
+          </CardContent>
+          <CardFooter className="flex flex-col gap-4">
+            <Button type="submit" className="w-full" disabled={isLoading}>
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Enviar Código
+            </Button>
+
+            <Button 
+              type="button" 
+              variant="link" 
+              size="sm" 
+              className="text-muted-foreground"
+              onClick={() => router.push("/login")}
+            >
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Voltar para o Login
+            </Button>
+          </CardFooter>
+        </form>
       </Card>
     </div>
   );
