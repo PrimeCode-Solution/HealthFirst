@@ -16,7 +16,7 @@ export function createEbookCategoryRepository(): EbookCategoryRepository {
 }
 
 async function create(data: CreateEbookCategoryDTO): Promise<EbookCategory> {
-  const response = await api.post<EbookCategory>("/ebook-categories", data);
+  const response = await api.post('/ebooks', data);
   return response.data;
 }
 
