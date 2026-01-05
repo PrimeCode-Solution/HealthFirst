@@ -12,6 +12,8 @@
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.962.0",
+    "@aws-sdk/s3-request-presigner": "^3.962.0",
     "@clerk/nextjs": "^6.35.5",
     "@hookform/resolvers": "^5.2.1",
     "@mercadopago/sdk-react": "^1.0.6",
@@ -45,7 +47,6 @@
     "@radix-ui/react-tooltip": "^1.2.7",
     "@tabler/icons-react": "^3.34.1",
     "@tanstack/react-query": "^5.90.10",
-    "@types/multer": "^2.0.0",
     "axios": "^1.11.0",
     "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.1",
@@ -56,7 +57,6 @@
     "input-otp": "^1.4.2",
     "lucide-react": "^0.536.0",
     "mercadopago": "^2.11.0",
-    "multer": "^2.0.2",
     "next": "15.4.6",
     "next-auth": "^4.24.13",
     "next-themes": "^0.4.6",
@@ -72,6 +72,7 @@
     "styled-jsx": "^5.1.7",
     "tailwind": "^2.3.1",
     "tailwind-merge": "^3.3.1",
+    "uuid": "^13.0.0",
     "vaul": "^1.1.2",
     "zod": "^4.1.5"
   },
@@ -86,6 +87,7 @@
     "@types/nodemailer": "^7.0.4",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/uuid": "^10.0.0",
     "eslint": "^9",
     "eslint-config-next": "15.4.6",
     "prettier": "^3.6.2",

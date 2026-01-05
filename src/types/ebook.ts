@@ -58,12 +58,15 @@ export interface EbookCategory {
   
   export interface CreateEbookDTO {
     title: string;
-    description?: string;
-    author: string;
+    description: string;
     categoryId: string;
     isPremium: boolean;
+    author: string;
     price?: number;
-    fileType: string;
+    fileUrl: string;    
+    coverUrl?: string;  
+    fileSize?: number;
+    fileType?: string;
   }
   
   export interface UpdateEbookDTO {

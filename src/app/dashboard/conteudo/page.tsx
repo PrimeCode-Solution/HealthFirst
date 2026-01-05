@@ -55,9 +55,9 @@ import {
   DollarSign,
   Gift,
   FileText,
-  ImageIcon,
 } from "lucide-react";
 import { toast } from "sonner";
+import { FileUpload } from "@/components/ui/file-upload"; 
 
 interface Ebook {
   id: string;
@@ -77,14 +77,13 @@ interface Ebook {
   createdAt: string;
 }
 
+// Removemos file e cover do Zod, pois controlaremos via State e URLs
 const ebookFormSchema = z.object({
   title: z.string().min(1, "Título é obrigatório"),
   description: z.string().min(1, "Descrição é obrigatória"),
   categoryId: z.string().min(1, "Categoria é obrigatória"),
   status: z.enum(["published", "draft"]),
   isPaid: z.boolean(), 
-  coverFile: z.any().optional(),
-  ebookFile: z.any().optional(),
 });
 
 type EbookFormData = z.infer<typeof ebookFormSchema>;
@@ -101,6 +100,9 @@ export default function ConteudoPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingEbook, setEditingEbook] = useState<Ebook | null>(null);
 
+  const [coverUrl, setCoverUrl] = useState<string | null>(null);
+  const [ebookUrl, setEbookUrl] = useState<string | null>(null);
+
   const form = useForm<EbookFormData>({
     resolver: zodResolver(ebookFormSchema),
     defaultValues: {
@@ -109,8 +111,6 @@ export default function ConteudoPage() {
       categoryId: "",
       status: "draft",
       isPaid: false,
-      coverFile: undefined,
-      ebookFile: undefined,
     },
   });
 
@@ -147,48 +147,47 @@ export default function ConteudoPage() {
       categoryId: "",
       status: "draft",
       isPaid: false,
-      price: undefined,
-      coverFile: undefined,
-      ebookFile: undefined,
     });
     setEditingEbook(null);
+    setCoverUrl(null);
+    setEbookUrl(null);
   };
 
   const handleSubmit = async (data: EbookFormData) => {
-    if (!editingEbook && !data.ebookFile) {
-      toast.error("Arquivo do ebook é obrigatório para novos ebooks");
+    // Validação manual das URLs
+    if (!ebookUrl) {
+      toast.error("Por favor, faça o upload do arquivo do Ebook antes de salvar.");
       return;
     }
 
     try {
-      const formData = new FormData();
-      formData.append("title", data.title);
-      formData.append("description", data.description);
-      formData.append("categoryId", data.categoryId);
-      formData.append("status", data.status);
-      formData.append("isPremium", String(data.isPaid));
-      formData.append("author", "Equipe HealthFirst");
-
-
-      if (data.coverFile instanceof File) {
-        formData.append("coverFile", data.coverFile);
-      }
-
-      if (data.ebookFile instanceof File) {
-        formData.append("ebookFile", data.ebookFile);
-      }
+      const payload = {
+        title: data.title,
+        description: data.description,
+        categoryId: data.categoryId,
+        status: data.status,
+        isPremium: data.isPaid,
+        author: "Equipe HealthFirst",
+        fileUrl: ebookUrl, 
+        coverUrl: coverUrl, 
+        price: data.isPaid ? 0 : null, 
+      };
 
       const method = editingEbook ? "PUT" : "POST";
       const url = editingEbook ? `/api/ebooks/${editingEbook.id}` : "/api/ebooks";
 
       const response = await fetch(url, {
         method,
-        body: formData,
+        headers: {
+          "Content-Type": "application/json", 
+        },
+        body: JSON.stringify(payload), 
       });
 
+      const responseData = await response.json();
+
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Erro ao salvar e-book");
+        throw new Error(responseData.error || "Erro ao salvar e-book");
       }
 
       toast.success(editingEbook ? "Ebook atualizado!" : "Ebook adicionado!");
@@ -196,6 +195,7 @@ export default function ConteudoPage() {
       setIsDialogOpen(false);
       resetForm();
     } catch (error: any) {
+      console.error(error);
       toast.error(error.message || "Erro ao processar requisição");
     }
   };
@@ -206,8 +206,11 @@ export default function ConteudoPage() {
     setValue("description", ebook.description);
     setValue("categoryId", ebook.categoryId);
     setValue("isPaid", ebook.isPremium);
-    setValue("price", ebook.price);
     setValue("status", ebook.status);
+    
+    setEbookUrl(ebook.fileUrl);
+    setCoverUrl(ebook.coverImage || null);
+    
     setIsDialogOpen(true);
   };
 
@@ -429,62 +432,54 @@ export default function ConteudoPage() {
                       <Separator />
 
                       <div className="space-y-4">
-                        <FormField
-                          control={form.control}
-                          name="coverFile"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Imagem de Capa</FormLabel>
-                              <div className="mt-2 flex items-center gap-4">
-                                <div className="flex-1">
-                                  <FormControl>
-                                    <Input
-                                      type="file"
-                                      accept="image/*"
-                                      onChange={(e) =>
-                                        field.onChange(e.target.files?.[0])
-                                      }
-                                    />
-                                  </FormControl>
-                                </div>
-                                <ImageIcon className="h-8 w-8 text-gray-400" />
-                              </div>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
+                        <div className="space-y-2">
+                           <FormLabel>Imagem de Capa</FormLabel>
+                           {coverUrl ? (
+                             <div className="relative w-full max-w-sm rounded border p-2">
+                               <img src={coverUrl} alt="Capa" className="h-32 w-auto object-cover rounded" />
+                               <Button 
+                                 type="button" 
+                                 variant="destructive" 
+                                 size="sm" 
+                                 className="absolute top-2 right-2"
+                                 onClick={() => setCoverUrl(null)}
+                               >
+                                 <Trash2 className="h-4 w-4" />
+                               </Button>
+                             </div>
+                           ) : (
+                             <FileUpload 
+                               onUploadComplete={setCoverUrl} 
+                               accept="image/*"
+                               label="Upload da Capa (JPG/PNG)"
+                             />
+                           )}
+                        </div>
 
-                        <FormField
-                          control={form.control}
-                          name="ebookFile"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>
-                                Arquivo do Ebook {!editingEbook && "*"}
-                              </FormLabel>
-                              <div className="mt-2 flex items-center gap-4">
-                                <div className="flex-1">
-                                  <FormControl>
-                                    <Input
-                                      type="file"
-                                      accept=".pdf,.epub,.mobi"
-                                      onChange={(e) =>
-                                        field.onChange(e.target.files?.[0])
-                                      }
-                                    />
-                                  </FormControl>
-                                </div>
-                                <FileText className="h-8 w-8 text-gray-400" />
-                              </div>
-                              <p className="mt-1 text-xs text-gray-500">
-                                Formatos aceitos: PDF, EPUB, MOBI (máx. 50MB)
-                                {editingEbook &&
-                                  " • Deixe em branco para manter o arquivo atual"}
-                              </p>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
+                        <div className="space-y-2">
+                           <FormLabel>Arquivo do Ebook *</FormLabel>
+                           {ebookUrl ? (
+                             <div className="flex items-center gap-2 text-green-600 bg-green-50 p-3 rounded border border-green-200">
+                               <FileText className="h-5 w-5" />
+                               <span className="text-sm font-medium truncate flex-1">Arquivo pronto: {ebookUrl.split('/').pop()}</span>
+                               <Button 
+                                 type="button" 
+                                 variant="ghost" 
+                                 size="sm"
+                                 className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                                 onClick={() => setEbookUrl(null)}
+                               >
+                                 Alterar
+                               </Button>
+                             </div>
+                           ) : (
+                             <FileUpload 
+                               onUploadComplete={setEbookUrl} 
+                               accept=".pdf,.epub,.mobi"
+                               label="Upload do Arquivo (PDF/EPUB)"
+                             />
+                           )}
+                        </div>
                       </div>
 
                       <div className="flex justify-end gap-3 pt-4">
@@ -498,6 +493,7 @@ export default function ConteudoPage() {
                         <Button
                           type="submit"
                           className="bg-green-500 hover:bg-green-600"
+                          disabled={!ebookUrl}
                         >
                           <Upload className="mr-2 h-4 w-4" />
                           {editingEbook ? "Atualizar" : "Salvar"} Ebook
@@ -509,41 +505,39 @@ export default function ConteudoPage() {
               </Dialog>
             )}
           </div>
-
+          
           <div className="my-4 grid grid-cols-3 gap-3 sm:my-8 sm:gap-6 md:grid-cols-3">
-            <Card className="!h-fit p-2 sm:p-6">
+             <Card className="!h-fit p-2 sm:p-6">
               <CardContent className="!h-fit p-0 sm:p-6">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-gray-600">
                       Total de Ebooks
-                    </p>
+                      </p>
                     <p className="text-2xl font-bold text-gray-900">
                       {ebooks.length}
-                    </p>
+                      </p>
                   </div>
                   <BookOpen className="h-8 w-8 text-blue-500" />
                 </div>
               </CardContent>
             </Card>
-
-            <Card className="!h-fit p-2 sm:p-6">
+             <Card className="!h-fit p-2 sm:p-6">
               <CardContent className="!h-fit p-0 sm:p-6">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-gray-600">
                       Conteúdo Gratuito
-                    </p>
+                      </p>
                     <p className="text-2xl font-bold text-gray-900">
                       {ebooks.filter((e) => !e.isPremium).length}
-                    </p>
+                      </p>
                   </div>
                   <Gift className="h-8 w-8 text-green-500" />
                 </div>
               </CardContent>
             </Card>
-
-            <Card className="!h-fit p-2 sm:p-6">
+             <Card className="!h-fit p-2 sm:p-6">
               <CardContent className="!h-fit p-0 sm:p-6">
                 <div className="flex items-center justify-between">
                   <div>
@@ -643,6 +637,7 @@ export default function ConteudoPage() {
                 </Table>
               </div>
 
+              {/* Mobile view */}
               <div className="space-y-4 md:hidden">
                 {ebooks.map((ebook) => (
                   <Card
@@ -666,9 +661,8 @@ export default function ConteudoPage() {
                             </p>
                           </div>
                         </div>
-
                         <div className="flex flex-shrink-0 gap-1">
-                          {isAdmin && (
+                           {isAdmin && (
                             <>
                               <Button
                                 size="sm"
@@ -690,7 +684,6 @@ export default function ConteudoPage() {
                           )}
                         </div>
                       </div>
-
                       <div className="grid grid-cols-2 gap-3 border-t border-gray-100 pt-2">
                         <div className="flex flex-col gap-1">
                           <span className="text-xs font-medium tracking-wide text-gray-500 uppercase">
@@ -700,8 +693,7 @@ export default function ConteudoPage() {
                             {ebook.category.name}
                           </span>
                         </div>
-
-                        <div className="flex flex-col gap-1">
+                         <div className="flex flex-col gap-1">
                           <span className="text-xs font-medium tracking-wide text-gray-500 uppercase">
                             Status
                           </span>

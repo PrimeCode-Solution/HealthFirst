@@ -1,4 +1,5 @@
 import  api  from '@/lib/api';
+import { create } from 'domain';
 
 export interface Ebook {
   id: string;
@@ -20,4 +21,5 @@ async function getByCategory(categoryName: string): Promise<Ebook[]> {
 
 export const ebookService = {
   getByCategory,
+  create,
 };
