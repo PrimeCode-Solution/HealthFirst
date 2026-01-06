@@ -132,7 +132,6 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST: Criar Agendamento (ATUALIZADO PARA MODELO DINÂMICO)
 export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -198,6 +197,8 @@ export async function POST(req: NextRequest) {
         throw new Error(`Usuário inválido (ID: ${finalUserId}). Faça login novamente.`);
       }
 
+      const appointmentId = crypto.randomUUID();
+
       const newAppointment = await tx.appointment.create({
         data: {
           userId: finalUserId,
@@ -205,15 +206,14 @@ export async function POST(req: NextRequest) {
           date: parseISO(date),
           startTime,
           endTime,
-          
-          // Novos Campos:
-          consultationTypeId: consultationType.id, // ID da tabela
-          amount: amount,                          // Preço salvo no momento
+          consultationTypeId: consultationType.id, 
+          amount: amount,                          
           
           status: AppointmentStatus.PENDING,
           patientName: finalPatientName,
           patientEmail: finalPatientEmail,
           patientPhone: finalPatientPhone || null,
+          videoUrl: `https://meet.jit.si/HealthFirst-${Math.random().toString(36).substring(7)}`,
         }
       });
 
