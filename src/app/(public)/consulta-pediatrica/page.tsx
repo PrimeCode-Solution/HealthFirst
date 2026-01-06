@@ -41,6 +41,10 @@ export default function ConsutaPediatricaPage() {
     }
   };
 
+  const handleDownload = (url: string) => {
+    window.open(url, "_blank");
+  };
+
   const gratuitos = ebooks.filter((e) => !e.isPremium);
   const premium = ebooks.filter((e) => e.isPremium);
 
