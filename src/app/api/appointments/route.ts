@@ -197,6 +197,23 @@ export async function POST(req: NextRequest) {
         throw new Error(`Usuário inválido (ID: ${finalUserId}). Faça login novamente.`);
       }
 
+      if (doctorId) {
+        const conflictingAppointment = await tx.appointment.findFirst({
+          where: {
+            doctorId: doctorId,
+            date: parseISO(date),
+            startTime: startTime,
+            status: {
+              notIn: [AppointmentStatus.CANCELLED] 
+            }
+          }
+        });
+
+        if (conflictingAppointment) {
+          throw new Error("CONFLICT_ERROR");
+        }
+      }
+
       const appointmentId = crypto.randomUUID();
 
       const newAppointment = await tx.appointment.create({
@@ -282,6 +299,9 @@ export async function POST(req: NextRequest) {
     }, { status: 201 });
 
   } catch (e: any) {
+    if (e.message === "CONFLICT_ERROR") {
+      return NextResponse.json({ error: "Este horário já está reservado." }, { status: 409 });
+    }
     console.error("Erro POST /appointments:", e);
     return NextResponse.json({ error: e.message || "Falha ao criar agendamento." }, { status: 500 });
   }

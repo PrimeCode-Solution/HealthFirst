@@ -52,7 +52,12 @@ api.interceptors.response.use(
       }
 
       const message = apiError.message || apiError.error || "Erro desconhecido";
-      return Promise.reject(new Error(message));
+      
+      const customError: any = new Error(message);
+      customError.status = status;
+      customError.response = error.response;
+      
+      return Promise.reject(customError);
       
     } else if (error.request) {
       console.error("Erro de conexão (Request):", error.request);
