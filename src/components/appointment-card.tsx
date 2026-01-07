@@ -14,7 +14,8 @@ import {
     CreditCard,
     UserCheck,
     Video,
-    MoreVertical
+    MoreVertical,
+    ExternalLink
   } from "lucide-react";
   import {
     DropdownMenu,
@@ -32,7 +33,6 @@ import {
   import { Button } from "@/components/ui/button";
   import { Badge } from "@/components/ui/badge";
   import { Card } from "@/components/ui/card";
-  import { Separator } from "@/components/ui/separator";
   import { cn } from "@/lib/utils";
   import { format, isAfter } from "date-fns";
   import { ptBR } from "date-fns/locale";
@@ -65,9 +65,8 @@ import {
     const isPatient = currentUser?.role === "USER";
     const isStaff = isDoctor || isAdmin;
     
-    // Tratamento de status para usar a config correta
-    const statusKey = appointment.status === 'SCHEDULED' ? 'SCHEDULED' : appointment.status;
-    const status = statusConfig[statusKey] || statusConfig.PENDING;
+    const statusKey = statusConfig[appointment.status] ? appointment.status : 'PENDING';
+    const status = statusConfig[statusKey];
     const StatusIcon = status.icon;
   
     const getAppointmentDateTime = () => {
@@ -80,14 +79,19 @@ import {
     };
   
     const hasPassed = isAfter(new Date(), getAppointmentDateTime());
+    
     const canShowCompleteButton = 
       hasPassed && 
       appointment.status !== 'COMPLETED' && 
       appointment.status !== 'CANCELLED';
   
+
+    const showVideoCall = appointment.videoUrl && 
+                          appointment.status !== 'CANCELLED' && 
+                          appointment.status !== 'COMPLETED';
+  
     const startTime = appointment.startTime?.slice(0, 5) || "--:--";
     
-    // Definição dos nomes (Quem vê quem)
     let mainName = "";
     let subName = null;
   
@@ -107,15 +111,10 @@ import {
       mainName = appointment.doctor?.name || "Dr. Não atribuído";
       subName = (
           <span className="text-xs text-muted-foreground block mt-0.5">
-              Para: {appointment.patientName || "Você"}
+              Especialista
           </span>
       );
     }
-  
-    // Lógica do botão de vídeo: Se tem URL e não está cancelado/concluído
-    const showVideoCall = appointment.videoUrl && 
-                          appointment.status !== 'CANCELLED' && 
-                          appointment.status !== 'COMPLETED';
   
     const canViewContact = isAdmin || (isDoctor && appointment.doctorId === currentUser?.id);
     
@@ -136,31 +135,28 @@ import {
         <div className={cn("absolute left-0 top-0 bottom-0 w-1.5", status.color.replace("bg-", "bg-opacity-100 bg-").split(" ")[0])} />
         
         <div className="flex flex-col">
-          {/* CORPO PRINCIPAL DO CARD */}
           <div className="flex flex-col md:flex-row md:items-center justify-between p-4 gap-4">
               
-              {/* ESQUERDA: Informações de Hora, Nome e Detalhes */}
               <div className="flex items-start gap-4 flex-1">
-                  {/* Box de Horário */}
                   <div className="flex h-14 w-14 shrink-0 flex-col items-center justify-center rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-700 font-semibold shadow-sm">
                       <span className="text-lg leading-none">{startTime}</span>
                       <span className="text-[10px] text-emerald-600/70 uppercase mt-0.5">Início</span>
                   </div>
   
                   <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between md:justify-start gap-2">
+                      <div className="flex items-start justify-between">
                           <div>
                               <h4 className="font-semibold text-gray-900 text-base truncate pr-2">
                                   {mainName}
                               </h4>
                               {subName}
                           </div>
-  
-                          {/* No mobile, o menu aparece aqui em cima para economizar espaço */}
-                          <div className="md:hidden">
+                          
+                          <div className="md:hidden pl-2">
                               <ActionMenu 
                                   appointment={appointment} 
                                   isDoctor={isDoctor} 
+                                  isPatient={isPatient}
                                   onEdit={onEdit} 
                                   onDelete={onDelete} 
                                   onComplete={onComplete} 
@@ -168,8 +164,7 @@ import {
                           </div>
                       </div>
   
-                      {/* Linha de Detalhes (Tipo, Preço, Contato) */}
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-sm text-muted-foreground">
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 mt-2 text-sm text-muted-foreground">
                           <div className="flex items-center gap-1.5 text-xs font-medium bg-gray-50 px-2 py-0.5 rounded-md border border-gray-100">
                               <Stethoscope className="h-3 w-3 text-emerald-600" />
                               <span className="truncate max-w-[150px]">
@@ -190,7 +185,7 @@ import {
                           {canViewContact && (
                               <Popover>
                                   <PopoverTrigger asChild>
-                                      <button className="text-muted-foreground hover:text-emerald-600 transition-colors focus:outline-none flex items-center gap-1 text-xs">
+                                      <button className="text-muted-foreground hover:text-emerald-600 transition-colors focus:outline-none flex items-center gap-1 text-xs cursor-pointer">
                                           <Info className="h-3 w-3" /> Info
                                       </button>
                                   </PopoverTrigger>
@@ -208,10 +203,8 @@ import {
                   </div>
               </div>
   
-              {/* DIREITA: Ações e Status (Desktop) */}
-              <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 mt-2 md:mt-0">
+              <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 mt-2 md:mt-0 pt-2 md:pt-0 border-t md:border-t-0 border-gray-100">
                   
-                  {/* Botões de Ação Principal */}
                   <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
                       {canShowCompleteButton && (isStaff || (isPatient && appointment.userId === currentUser?.id)) && (
                           <Button 
@@ -232,23 +225,22 @@ import {
                               onClick={() => window.open(appointment.videoUrl!, '_blank')}
                           >
                               <Video className="mr-2 h-4 w-4" />
-                              Entrar na Sala
+                              Sala Virtual
                           </Button>
                       )}
                   </div>
   
-                  {/* Badge e Menu (Desktop layout) */}
-                  <div className="flex items-center justify-between md:justify-end gap-3 pt-2 md:pt-0 border-t md:border-t-0 border-gray-100 mt-2 md:mt-0">
+                  <div className="flex items-center justify-between md:justify-end gap-3">
                       <Badge variant="outline" className={cn("px-2.5 py-0.5 font-medium flex items-center gap-1.5 h-7", status.color)}>
                           <StatusIcon className="h-3.5 w-3.5" />
                           {status.label}
                       </Badge>
   
-                      {/* Menu apenas no Desktop (no mobile fica no topo) */}
                       <div className="hidden md:block">
                           <ActionMenu 
                               appointment={appointment} 
-                              isDoctor={isDoctor} 
+                              isDoctor={isDoctor}
+                              isPatient={isPatient}
                               onEdit={onEdit} 
                               onDelete={onDelete} 
                               onComplete={onComplete} 
@@ -258,7 +250,6 @@ import {
               </div>
           </div>
   
-          {/* FOOTER: Detalhes Técnicos (Apenas Admin) */}
           {isAdmin && (
               <div className="bg-slate-50 border-t border-slate-100 px-4 py-2 text-[10px] text-slate-500 flex flex-wrap gap-x-4 gap-y-1 items-center">
                   <div className="flex items-center gap-1">
@@ -269,14 +260,6 @@ import {
                       <Hash className="h-3 w-3 text-slate-400" />
                       <span className="font-mono">{appointment.id.slice(-8)}...</span>
                   </div>
-                  {appointment.payment?.id && (
-                      <div className="flex items-center gap-1">
-                          <CreditCard className="h-3 w-3 text-slate-400" />
-                          <span className={appointment.payment.status === 'APPROVED' ? "text-green-600" : "text-yellow-600"}>
-                              {appointment.payment.status === 'APPROVED' ? 'Pago' : appointment.payment.status}
-                          </span>
-                      </div>
-                  )}
               </div>
           )}
         </div>
@@ -284,9 +267,9 @@ import {
     );
   }
   
-  // --- Subcomponentes para limpar o código principal ---
+  function ActionMenu({ appointment, isDoctor, isPatient, onEdit, onDelete, onComplete }: any) {
+      const isCompletedOrCancelled = appointment.status === 'COMPLETED' || appointment.status === 'CANCELLED';
   
-  function ActionMenu({ appointment, isDoctor, onEdit, onDelete, onComplete }: any) {
       return (
           <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -298,7 +281,7 @@ import {
                   <DropdownMenuLabel>Opções</DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   
-                  {appointment.status !== 'COMPLETED' && appointment.status !== 'CANCELLED' && (
+                  {!isPatient && !isCompletedOrCancelled && (
                       <DropdownMenuItem onClick={() => onEdit(appointment)}>
                           Editar detalhes
                       </DropdownMenuItem>
@@ -311,11 +294,24 @@ import {
                       </DropdownMenuItem>
                   )}
   
+                  {appointment.videoUrl && !isCompletedOrCancelled && (
+                       <DropdownMenuItem onClick={() => window.open(appointment.videoUrl, '_blank')}>
+                          <ExternalLink className="mr-2 h-4 w-4" />
+                          Abrir Link da Sala
+                       </DropdownMenuItem>
+                  )}
+  
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => onDelete(appointment.id)} className="text-red-600 focus:text-red-700 focus:bg-red-50">
-                      <XCircle className="mr-2 h-4 w-4" />
-                      Cancelar
-                  </DropdownMenuItem>
+                  
+                  {!isCompletedOrCancelled && (
+                      <DropdownMenuItem 
+                          onClick={() => onDelete(appointment.id)} 
+                          className="text-red-600 focus:text-red-700 focus:bg-red-50"
+                      >
+                          <XCircle className="mr-2 h-4 w-4" />
+                          Cancelar Agendamento
+                      </DropdownMenuItem>
+                  )}
               </DropdownMenuContent>
           </DropdownMenu>
       )
@@ -326,7 +322,7 @@ import {
           <div className="flex flex-col">
               <div className="p-3 bg-emerald-50/50 border-b border-emerald-100 flex items-center gap-2">
                   <User className="h-4 w-4 text-emerald-700" /> 
-                  <span className="font-semibold text-emerald-900 text-sm">Contato do Paciente</span>
+                  <span className="font-semibold text-emerald-900 text-sm">Contato</span>
               </div>
               <div className="p-3 space-y-3">
                   <div className="space-y-0.5">
@@ -335,22 +331,14 @@ import {
                   </div>
                   {email && (
                       <div className="flex items-center gap-2">
-                          <div className="h-6 w-6 rounded-full bg-blue-50 flex items-center justify-center shrink-0">
-                              <Mail className="h-3 w-3 text-blue-600" />
-                          </div>
-                          <a href={`mailto:${email}`} className="text-sm text-blue-600 hover:underline truncate">
-                              {email}
-                          </a>
+                          <Mail className="h-3 w-3 text-blue-600" />
+                          <a href={`mailto:${email}`} className="text-sm text-blue-600 hover:underline truncate">{email}</a>
                       </div>
                   )}
                   {phone && (
                       <div className="flex items-center gap-2">
-                          <div className="h-6 w-6 rounded-full bg-green-50 flex items-center justify-center shrink-0">
-                              <MessageCircle className="h-3 w-3 text-green-600" />
-                          </div>
-                          <a href={getWhatsappLink(phone)} target="_blank" rel="noopener noreferrer" className="text-sm text-green-600 hover:underline">
-                              {phone}
-                          </a>
+                          <MessageCircle className="h-3 w-3 text-green-600" />
+                          <a href={getWhatsappLink(phone)} target="_blank" rel="noopener noreferrer" className="text-sm text-green-600 hover:underline">{phone}</a>
                       </div>
                   )}
               </div>
