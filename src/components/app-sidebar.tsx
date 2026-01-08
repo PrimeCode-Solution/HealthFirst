@@ -11,6 +11,8 @@ import {
   ShieldCheck,
   LogOut,
   Stethoscope,
+  AlertCircle,
+  History
 } from "lucide-react";
 
 import { NavMain } from "@/components/nav-main";
@@ -68,6 +70,16 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           title: "Consultas",
           url: "/dashboard/admin/consultas", 
           icon: Stethoscope, 
+        },
+        {
+          title: "Cancelamentos",
+          url: "/dashboard/admin/cancelamentos",
+          icon: AlertCircle, 
+        },
+        {
+          title: "Histórico",
+          url: "/dashboard/admin/historico",
+          icon: History, 
         },
         {
           title: "Clientes",

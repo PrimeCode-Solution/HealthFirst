@@ -10,6 +10,7 @@ import {
   isValid as isValidDate,
   startOfDay,
   endOfDay,
+  differenceInHours,
 } from "date-fns";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-config";
@@ -142,7 +143,11 @@ export async function PUT(
     const params = await props.params;
     const { id } = params;
 
-    const current = await prisma.appointment.findUnique({ where: { id } });
+    const current = await prisma.appointment.findUnique({ 
+      where: { id },
+      include: { payment: true } 
+    });
+    
     if (!current)
       return NextResponse.json({ error: "not_found" }, { status: 404 });
 
@@ -158,6 +163,7 @@ export async function PUT(
     const { status, ...rest } = body;
 
     let newStatus: AppointmentStatus | undefined;
+    
     if (typeof status === "string") {
       const allowed = Object.values(AppointmentStatus);
       if (!allowed.includes(status as AppointmentStatus)) {
@@ -177,7 +183,6 @@ export async function PUT(
           h,
           m
         );
-
         const hasPassed = new Date() > appointmentDateTime;
 
         if (!isAdmin && !isAssignedDoctor && !(isOwner && hasPassed)) {
@@ -195,6 +200,19 @@ export async function PUT(
         status: newStatus ?? current.status,
       },
     });
+    if (newStatus === "COMPLETED" && current.status !== "COMPLETED") {
+        await prisma.appointmentHistory.create({
+            data: {
+                originalId: current.id,
+                userId: current.userId,
+                doctorId: current.doctorId,
+                date: current.date,
+                status: "COMPLETED",
+                reason: "FINISHED_CONSULTATION", 
+                amount: current.payment?.amount || 0
+            }
+        });
+    }
 
     return NextResponse.json(updated);
   } catch (e) {
@@ -230,10 +248,52 @@ export async function DELETE(
     const isAssignedDoctor = appt.doctorId === session.user.id;
 
     if (!isOwner && !isAdmin && !isAssignedDoctor) {
-      return NextResponse.json({
-        error: "Permissão negada."
-      }, { status: 403 });
+      return NextResponse.json({ error: "Permissão negada." }, { status: 403 });
     }
+
+    const apptDate = new Date(appt.date);
+    const [h, m] = appt.startTime.split(':').map(Number);
+    const appointmentDateTime = new Date(
+      apptDate.getUTCFullYear(),
+      apptDate.getUTCMonth(),
+      apptDate.getUTCDate(),
+      h, 
+      m
+    );
+
+    const now = new Date();
+    const hoursUntilAppointment = differenceInHours(appointmentDateTime, now);
+    const isLateCancellation = hoursUntilAppointment < 24;
+
+    if (isLateCancellation && !isAdmin && isOwner) {
+      const existingRequest = await prisma.cancellationRequest.findUnique({
+        where: { appointmentId: id }
+      });
+
+      if (existingRequest) {
+        return NextResponse.json({ error: "Já existe uma solicitação pendente." }, { status: 409 });
+      }
+
+      await prisma.$transaction([
+        prisma.appointment.update({
+          where: { id },
+          data: { status: "CANCELLATION_REQUESTED" } 
+        }),
+        prisma.cancellationRequest.create({
+          data: {
+            appointmentId: id,
+            reason: "Cancelamento com menos de 24h de antecedência",
+            status: "PENDING"
+          }
+        })
+      ]);
+
+      return NextResponse.json({ 
+        message: "Solicitação enviada para análise.",
+        status: "REVIEW_REQUIRED"
+      }, { status: 200 });
+    }
+
 
     let refundStatus = "NOT_APPLICABLE";
     
@@ -243,18 +303,12 @@ export async function DELETE(
       
       try {
         const refundClient = new PaymentRefund(mpClient);
-        
-        await refundClient.create({ 
-          payment_id: appt.payment.mercadoPagoId 
-        });
-        
+        await refundClient.create({ payment_id: appt.payment.mercadoPagoId });
         refundStatus = "SUCCESS";
-        console.log(`Reembolso processado para o pagamento: ${appt.payment.mercadoPagoId}`);
       } catch (mpError) {
-        console.error("Erro ao processar reembolso no Mercado Pago:", mpError);
+        console.error("Erro MP:", mpError);
         refundStatus = "FAILED";
-        // Opcional: Você pode decidir bloquear o cancelamento se o reembolso falhar
-        return NextResponse.json({ error: "Falha ao processar estorno. Tente novamente." }, { status: 500 });
+        return NextResponse.json({ error: "Falha ao processar estorno." }, { status: 500 });
       }
     }
 
@@ -263,29 +317,31 @@ export async function DELETE(
     else if (isAssignedDoctor) reason = "MANUAL_DOCTOR";
     else if (isOwner) reason = "MANUAL_PATIENT";
 
-    await prisma.appointmentHistory.create({
-      data: {
-        originalId: appt.id,
-        userId: appt.userId,
-        doctorId: appt.doctorId,
-        date: appt.date,
-        status: "CANCELLED",
-        reason: `${reason}_REFUND_${refundStatus}`,
-        amount: appt.payment?.amount || 0
-      }
-    });
-
-    await prisma.appointment.delete({ where: { id } });
+    await prisma.$transaction([
+        prisma.appointmentHistory.create({
+            data: {
+                originalId: appt.id,
+                userId: appt.userId,
+                doctorId: appt.doctorId,
+                date: appt.date,
+                status: "CANCELLED",
+                reason: `${reason}_REFUND_${refundStatus}`,
+                amount: appt.payment?.amount || 0
+            }
+        }),
+        prisma.appointment.update({
+            where: { id },
+            data: { status: "CANCELLED" }
+        })
+    ]);
 
     return NextResponse.json({ 
       message: "Agendamento cancelado com sucesso.",
       refunded: refundStatus === "SUCCESS"
-  }, { status: 200 });
+    }, { status: 200 });
 
-} catch (e) {
+  } catch (e) {
     console.error(e);
     return NextResponse.json({ error: "internal_error" }, { status: 500 });
   }
 }
-
-

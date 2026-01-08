@@ -15,25 +15,38 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const timeLimit = new Date(Date.now() - 60 * 60 * 1000);
+    const now = new Date();
+    
+    const pendingTimeLimit = new Date(now.getTime() - 60 * 60 * 1000); 
+    
+    const cancelledTimeLimit = new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000); 
 
-    const appointmentsToDelete = await prisma.appointment.findMany({
+    const pendingToDelete = await prisma.appointment.findMany({
       where: {
         status: AppointmentStatus.PENDING, 
-        createdAt: { lt: timeLimit },
-        payment: {
-            status: PaymentStatus.PENDING
-        }
+        createdAt: { lt: pendingTimeLimit },
+        payment: { status: PaymentStatus.PENDING }
       },
       include: { payment: true },
       take: 50, 
     });
 
-    if (appointmentsToDelete.length > 0) {
-      await prisma.$transaction(async (tx) => {
-        
+    const cancelledToDelete = await prisma.appointment.findMany({
+      where: {
+        status: AppointmentStatus.CANCELLED,
+        updatedAt: { lt: cancelledTimeLimit } 
+      },
+      select: { id: true },
+      take: 50
+    });
+
+    let totalProcessed = 0;
+
+    await prisma.$transaction(async (tx) => {
+      
+      if (pendingToDelete.length > 0) {
         await tx.appointmentHistory.createMany({
-          data: appointmentsToDelete.map(app => ({
+          data: pendingToDelete.map(app => ({
             originalId: app.id,
             userId: app.userId,
             doctorId: app.doctorId,
@@ -44,17 +57,29 @@ export async function GET(req: NextRequest) {
           }))
         });
 
-        const ids = appointmentsToDelete.map(a => a.id);
+        const pendingIds = pendingToDelete.map(a => a.id);
         await tx.appointment.deleteMany({
-          where: { id: { in: ids } }
+          where: { id: { in: pendingIds } }
         });
-      });
-    }
+        
+        totalProcessed += pendingToDelete.length;
+      }
+
+      if (cancelledToDelete.length > 0) {
+        const cancelledIds = cancelledToDelete.map(a => a.id);
+        await tx.appointment.deleteMany({
+            where: { id: { in: cancelledIds } }
+        });
+        
+        totalProcessed += cancelledToDelete.length;
+      }
+    });
 
     return NextResponse.json({
       success: true,
       message: "Limpeza executada com segurança",
-      processed: appointmentsToDelete.length,
+      processed_pending: pendingToDelete.length,
+      processed_cancelled: cancelledToDelete.length,
       timestamp: new Date().toISOString()
     });
 

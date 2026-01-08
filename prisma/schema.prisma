@@ -30,6 +30,14 @@ enum AppointmentStatus {
   CONFIRMED   // Pagamento confirmado
   CANCELLED   // Cancelado
   COMPLETED   // Concluído
+  CANCELLATION_REQUESTED // Cancelamento Solicitado
+}
+
+// Enum para status da requisição de cancelamento
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 // Enum para status do pagamento
@@ -70,6 +78,8 @@ model User {
   // Relações
   appointments        Appointment[] @relation("PatientAppointments")
   doctorAppointments  Appointment[] @relation("DoctorAppointments")
+  patientHistory      AppointmentHistory[] @relation("PatientHistory")
+  doctorHistory       AppointmentHistory[] @relation("DoctorHistory")
   subscription   Subscription?
   ebookAccess    UserEbookAccess[]
   businessHours BusinessHours?
@@ -92,6 +102,22 @@ model EbookCategory {
   ebooks      Ebook[]
   
   @@map("ebook_categories")
+}
+
+model CancellationRequest {
+  id            String        @id @default(cuid())
+  appointmentId String        @unique 
+  reason        String?       
+  adminNotes    String?       
+  status        RequestStatus @default(PENDING)
+  
+  requestedAt   DateTime      @default(now())
+  reviewedAt    DateTime?
+
+  // O lado que guarda a chave estrangeira (appointmentId)
+  appointment   Appointment   @relation(fields: [appointmentId], references: [id])
+
+  @@map("cancellation_requests")
 }
 
 model ConsultationType {
@@ -227,6 +253,8 @@ model Appointment {
   doctor      User?     @relation("DoctorAppointments", fields: [doctorId], references: [id])
   payment     Payment?
 
+  cancellationRequest CancellationRequest?
+
   @@map("appointments")
 }
 
@@ -329,21 +357,20 @@ model ProcessedWebhookEvent {
 
 model AppointmentHistory {
   id          String   @id @default(cuid())
-  originalId  String?  // ID original do agendamento
+  originalId  String? 
   
-  userId      String   // Paciente
-  doctorId    String?  // Médico responsável
+  userId      String   
+  doctorId    String? 
   
   date        DateTime
-  status      String   // "CANCELLED", "COMPLETED" (caso arquivemos no futuro)
-  
-  // Motivo do cancelamento/exclusão
-  // Ex: "TIMEOUT_PAYMENT", "MANUAL_ADMIN", "MANUAL_DOCTOR", "MANUAL_PATIENT"
+  status      String   
   reason      String   
-  
   amount      Decimal? @db.Decimal(10,2)
   
   archivedAt  DateTime @default(now())
+
+  user        User      @relation("PatientHistory", fields: [userId], references: [id], onDelete: Cascade)
+  doctor      User?     @relation("DoctorHistory", fields: [doctorId], references: [id])
 
   @@map("appointment_history")
 }
