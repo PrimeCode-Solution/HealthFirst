@@ -26,7 +26,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, CalendarIcon } from "lucide-react";
+import { Loader2, AlertCircle } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 // Schema do formulário
 const formSchema = z.object({
@@ -46,7 +47,7 @@ type FormValues = z.infer<typeof formSchema>;
 export function useCreateAppointmentMutation() {
   const { data: session } = useSession();
   const queryClient = useQueryClient();
-  const [isOpen, setIsOpen] = useState(false); 
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const isAdmin = session?.user?.role === "ADMIN";
 
@@ -76,6 +77,8 @@ export function useCreateAppointmentMutation() {
 
   const mutation = useMutation({
     mutationFn: async (values: FormValues) => {
+      setErrorMsg(null); 
+      
       // Validação extra para Admin
       if (isAdmin && !values.doctorId) {
         throw new Error("Selecione um médico responsável.");
@@ -94,11 +97,20 @@ export function useCreateAppointmentMutation() {
       toast.success("Agendamento criado com sucesso!");
       queryClient.invalidateQueries({ queryKey: ["appointments"] });
       form.reset();
+      setErrorMsg(null);
     },
     onError: (error: any) => {
-      console.error(error);
-      const msg = error.response?.data?.error || error.message || "Erro ao criar.";
-      toast.error(msg);
+      console.error("Erro no agendamento:", error);
+      
+      if (error.status === 409) {
+        const conflictMsg = "Este horário acabou de ser reservado por outro paciente. Por favor, escolha outro.";
+        setErrorMsg(conflictMsg);
+        toast.error(conflictMsg);
+      } else {
+        const msg = error.response?.data?.error || error.message || "Erro ao criar agendamento.";
+        setErrorMsg(msg);
+        toast.error(msg);
+      }
     },
   });
 
@@ -110,6 +122,16 @@ export function useCreateAppointmentMutation() {
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-4">
         
+        {errorMsg && (
+          <Alert variant="destructive" className="animate-in fade-in slide-in-from-top-2">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Erro no Agendamento</AlertTitle>
+            <AlertDescription>
+              {errorMsg}
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* Dados do Paciente */}
         <div className="grid gap-4 sm:grid-cols-2">
             <FormField
