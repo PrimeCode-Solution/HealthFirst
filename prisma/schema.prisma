@@ -254,6 +254,7 @@ model Appointment {
   payment     Payment?
 
   cancellationRequest CancellationRequest?
+  reminderSent Boolean @default(false)
 
   @@map("appointments")
 }
