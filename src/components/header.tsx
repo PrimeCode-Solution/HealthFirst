@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Menu, LayoutDashboard, LogOut, User } from "lucide-react";
+import { Menu, LayoutDashboard, LogOut, User, Stethoscope } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Image from "next/image";
 
@@ -31,6 +31,7 @@ const navigationItems = [
   { title: "Consulta Geral", href: "/consulta-geral" },
   { title: "Consulta Nutricional", href: "/consulta-nutricional" },
   { title: "Agendamento", href: "/agendar-consulta" },
+  { title: "Médicos Parceiros", href: "/medicos" },
 ];
 
 export function Header() {

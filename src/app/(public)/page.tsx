@@ -169,6 +169,36 @@ export default function Home() {
                 </div>
             </section>
 
+            <section className="py-24 bg-slate-50 border-y border-slate-200">
+                <div className="container px-4 md:px-6">
+                    <div className="grid gap-10 sm:px-10 md:gap-16 md:grid-cols-2 items-center">
+                    <div className="space-y-4">
+                        <h2 className="text-3xl font-bold tracking-tighter md:text-4xl/tight text-slate-900">
+                        Conheça nossa equipe de especialistas
+                        </h2>
+                        <p className="max-w-[600px] text-slate-600 md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
+                        Nossos médicos são altamente qualificados e prontos para oferecer o melhor atendimento, seja presencial ou online. Verifique as especialidades e horários disponíveis.
+                        </p>
+                        <div className="flex flex-col gap-2 min-[400px]:flex-row">
+                        <Button asChild size="lg" className="bg-primary hover:bg-primary/90">
+                            <Link href="/medicos">
+                            Ver Lista de Médicos
+                            </Link>
+                        </Button>
+                        </div>
+                    </div>
+                    
+                    <div className="flex justify-center">
+                        <img 
+                            src="/images/home/team-image.png" 
+                            alt="Equipe Médica" 
+                            className="rounded-xl shadow-xl border border-slate-100 object-cover"
+                        />
+                    </div>
+                    </div>
+                </div>
+            </section>
+
             {/* CTA Final Section */}
             <section className="py-20 bg-slate-50">
                 <div className="container mx-auto px-4 text-center">
