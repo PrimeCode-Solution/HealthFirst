@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Clock } from "lucide-react";
-import { BusinessHours } from "@prisma/client";
+import { BusinessHours } from "@/generated/prisma";
 
 interface DoctorScheduleViewerProps {
   businessHours: BusinessHours | null;
