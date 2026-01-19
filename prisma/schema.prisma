@@ -66,6 +66,7 @@ model User {
   phone     String
   password  String   // Senha criptografada (hash)
   role      UserRole @default(USER)
+  image         String?
   bio       String?  @db.Text
   specialty String?  // Ex: "Cardiologista", "Pediatra"
 

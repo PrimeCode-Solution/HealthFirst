@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/sidebar";
 import { useSession, signOut } from "next-auth/react";
 import { usePremiumAccess } from "@/hooks/usePremiumAccess";
+import { title } from "process";
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { data: session } = useSession();
@@ -44,6 +45,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         url: "/dashboard",
         icon: LayoutDashboard,
       },
+      {
+        title: "Meu Perfil",
+        url: "/dashboard/perfil",
+        icon: Users,
+      }
     ];
 
     if (userRole === "ADMIN" || userRole === "DOCTOR") {
