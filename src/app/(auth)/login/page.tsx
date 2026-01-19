@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { useState, Suspense, useEffect } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -34,9 +34,18 @@ function LoginFormContent() {
   const searchParams = useSearchParams();
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [isGoogleLoading, setIsGoogleLoading] = useState(false); // Apenas estado do Google
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
-  const callbackUrl = searchParams.get("callbackUrl") || "/";
+  const callbackUrl = searchParams.get("callbackUrl") || "/"; 
+
+  useEffect(() => {
+    const error = searchParams.get("error");
+    if (error === "OAuthAccountNotLinked") {
+      toast.error("Este e-mail já está cadastrado com outro método de login.");
+    } else if (error) {
+      toast.error("Erro ao realizar login. Tente novamente.");
+    }
+  }, [searchParams]);
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -48,24 +57,21 @@ function LoginFormContent() {
 
   const onSubmit = async (data: LoginFormValues) => {
     setIsLoading(true);
-    try {
-      const result = await signIn("credentials", {
-        email: data.email,
-        password: data.password,
-        redirect: true,
-        callbackUrl: callbackUrl,
-      });
+    
+    const result = await signIn("credentials", {
+      email: data.email,
+      password: data.password,
+      redirect: false, 
+      callbackUrl: callbackUrl,
+    });
 
-      if (result?.error) {
-        toast.error("E-mail ou senha incorretos.");
-        setIsLoading(false);
-      } else {
-        toast.success("Login realizado com sucesso!");
-        router.push(callbackUrl);
-      }
-    } catch (error) {
-      toast.error("Erro ao conectar com o servidor.");
+    if (result?.error) {
+      toast.error("E-mail ou senha incorretos.");
       setIsLoading(false);
+    } else {
+      toast.success("Login realizado com sucesso!");
+      router.refresh(); 
+      router.push(callbackUrl);
     }
   };
 

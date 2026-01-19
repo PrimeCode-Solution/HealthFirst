@@ -27,6 +27,9 @@ export async function GET(
         name: true,
         email: true,
         phone: true,
+        image: true, 
+        bio: true,   
+        specialty: true, 
         role: true,
         createdAt: true,
         updatedAt: true,
@@ -67,6 +70,10 @@ export async function PUT(
     if (body.name !== undefined) dataToUpdate.name = body.name;
     if (body.email !== undefined) dataToUpdate.email = body.email;
     if (body.phone !== undefined) dataToUpdate.phone = body.phone;
+    
+    if (body.image !== undefined) dataToUpdate.image = body.image;
+    if (body.bio !== undefined) dataToUpdate.bio = body.bio;
+    if (body.specialty !== undefined) dataToUpdate.specialty = body.specialty;
 
     if (Object.keys(dataToUpdate).length === 0) {
       return NextResponse.json({ message: "Nothing to update" });
@@ -80,7 +87,10 @@ export async function PUT(
         name: true,
         email: true,
         phone: true,
+        image: true, 
         role: true,
+        bio: true,
+        specialty: true,
         updatedAt: true,
       },
     });
