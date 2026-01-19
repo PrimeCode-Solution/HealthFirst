@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
     });
 
     if (appointments.length === 0) {
-      return NextResponse.json({ message: "Nenhum link pendente para agora." });
+      return NextResponse.json({ message: "Nenhum link pendente." });
     }
 
     let sentCount = 0;
@@ -50,7 +50,8 @@ export async function GET(req: NextRequest) {
 
         const minutesUntil = differenceInMinutes(appointmentDateTime, now);
 
-        if (minutesUntil >= 0 && minutesUntil <= 20) {
+
+        if (minutesUntil >= -15 && minutesUntil <= 65) {
           
           const phone = app.patientPhone || app.user.phone;
           const patientName = app.patientName || app.user.name || "Paciente";
