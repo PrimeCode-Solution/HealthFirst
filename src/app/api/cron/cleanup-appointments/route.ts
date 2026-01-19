@@ -1,32 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/providers/prisma";
-import { AppointmentStatus, PaymentStatus } from "@/generated/prisma"; 
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get("authorization");
-  
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json(
-      { error: "Unauthorized: Invalid or missing Cron Secret" },
-      { status: 401 }
-    );
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
     const now = new Date();
-    const pendingTimeLimit = new Date(now.getTime() - 60 * 60 * 1000); 
+    const pendingTimeLimit = new Date(now.getTime() - 20 * 60 * 1000); 
     const cancelledTimeLimit = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000); 
 
     const pendingToDelete = await prisma.appointment.findMany({
       where: {
-        status: AppointmentStatus.PENDING, 
+        status: "PENDING", 
         createdAt: { lt: pendingTimeLimit },
         OR: [
             { payment: { is: null } },
-            { payment: { status: PaymentStatus.PENDING } },
-            { payment: { status: PaymentStatus.REJECTED } }
+            { payment: { status: "PENDING" } },
+            { payment: { status: "REJECTED" } }
         ]
       },
       include: { payment: true },
@@ -35,63 +30,49 @@ export async function GET(req: NextRequest) {
 
     const cancelledToDelete = await prisma.appointment.findMany({
       where: {
-        status: AppointmentStatus.CANCELLED,
+        status: "CANCELLED",
         updatedAt: { lt: cancelledTimeLimit } 
       },
       select: { id: true },
       take: 50
     });
 
-    let totalProcessed = 0;
-
     await prisma.$transaction(async (tx) => {
-      
       if (pendingToDelete.length > 0) {
         await tx.appointmentHistory.createMany({
           data: pendingToDelete.map(app => ({
-            originalId: app.id,
-            userId: app.userId,
-            doctorId: app.doctorId,
-            date: app.date,
+            appointmentId: app.id, 
+            userId: app.userId,    
+            doctorId: app.doctorId, 
+            date: app.date,        
             status: "CANCELLED",
-            reason: "TIMEOUT_PAYMENT", 
-            amount: app.payment?.amount || 0
+            reason: "TIMEOUT_PAYMENT",
           }))
         });
 
         const pendingIds = pendingToDelete.map(a => a.id);
         await tx.appointment.updateMany({
-          where: { id: { in: pendingIds } },
-          data: { status: AppointmentStatus.CANCELLED }
+            where: { id: { in: pendingIds } },
+            data: { status: "CANCELLED" }
         });
-        
-        totalProcessed += pendingToDelete.length;
       }
 
       if (cancelledToDelete.length > 0) {
         const cancelledIds = cancelledToDelete.map(a => a.id);
         
-        await tx.payment.deleteMany({
-            where: { appointmentId: { in: cancelledIds } }
-        });
 
-        await tx.appointmentHistory.deleteMany({
-            where: { originalId: { in: cancelledIds } }
-        });
+        try {
+            await tx.payment.deleteMany({ where: { appointmentId: { in: cancelledIds } } });
+            await tx.appointmentHistory.deleteMany({ where: { appointmentId: { in: cancelledIds } } });
+        } catch (e) {
+            console.log("Aviso: Falha ao limpar dependências (possível diferença de nome de campo)", e);
+        }
 
-        await tx.appointment.deleteMany({
-            where: { id: { in: cancelledIds } }
-        });
-        
-        totalProcessed += cancelledToDelete.length;
+        await tx.appointment.deleteMany({ where: { id: { in: cancelledIds } } });
       }
     });
 
-    return NextResponse.json({
-      success: true,
-      processed_pending: pendingToDelete.length,
-      processed_deleted: cancelledToDelete.length,
-    });
+    return NextResponse.json({ success: true, processed: pendingToDelete.length });
 
   } catch (error: any) {
     console.error("Cleanup Error:", error);

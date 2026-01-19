@@ -1,0 +1,34 @@
+name: Cron Jobs Scheduler
+
+on:
+  schedule:
+    # Roda a cada 10 minutos
+    - cron: '*/10 * * * *'
+
+jobs:
+  run-crons:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call Send Video Link (Every 10 mins)
+        run: |
+          curl -X GET ${{ secrets.VERCEL_APP_URL }}/api/cron/send-video-link \
+          -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+          --fail || echo "Video Link Cron Failed"
+
+      - name: Call Cleanup Appointments (Every 10 mins)
+        run: |
+          curl -X GET ${{ secrets.VERCEL_APP_URL }}/api/cron/cleanup-appointments \
+          -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+          --fail || echo "Cleanup Cron Failed"
+
+      - name: Call Send Reminders (Only at 12:00 UTC)
+        # Lógica simples: Se a hora atual for 12, executa.
+        if: github.event.schedule == '0 12 * * *' || contains(github.event.schedule, '*/10') 
+        run: |
+          # Verifica se é perto das 12h (horário do servidor) para enviar lembretes
+          HOUR=$(date +%H)
+          if [ "$HOUR" == "12" ]; then
+            curl -X GET ${{ secrets.VERCEL_APP_URL }}/api/cron/send-reminders \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            --fail || echo "Reminder Cron Failed"
+          fi

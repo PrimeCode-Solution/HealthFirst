@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
 
         const minutesUntil = differenceInMinutes(appointmentDateTime, now);
 
-        if (minutesUntil >= -15 && minutesUntil <= 65) {
+        if (minutesUntil >= 0 && minutesUntil <= 20) {
           
           const phone = app.patientPhone || app.user.phone;
           const patientName = app.patientName || app.user.name || "Paciente";
