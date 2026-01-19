@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/providers/prisma";
 import { sendVideoLink } from "@/lib/whatsapp";
-import { startOfDay, endOfDay, format, differenceInMinutes, parse } from "date-fns";
+import { startOfDay, 
+    endOfDay, 
+    format, 
+    differenceInMinutes, 
+    parse, 
+    addHours } from "date-fns";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +23,7 @@ export async function GET(req: NextRequest) {
 
     const appointments = await prisma.appointment.findMany({
       where: {
-        date: { gte: todayStart, lte: todayEnd },
+        date: { gte: todayStart, lte: todayEnd }, 
         status: "CONFIRMED",
         videoUrl: { not: null }, 
         videoLinkSent: false,    
@@ -36,13 +41,18 @@ export async function GET(req: NextRequest) {
     for (const app of appointments) {
       try {
         const appointmentDateStr = format(app.date, "yyyy-MM-dd");
-        const appointmentDateTime = parse(
+        
+        let appointmentDateTime = parse(
           `${appointmentDateStr} ${app.startTime}`, 
           "yyyy-MM-dd HH:mm", 
           new Date()
         );
 
+        appointmentDateTime = addHours(appointmentDateTime, 3);
+
         const minutesUntil = differenceInMinutes(appointmentDateTime, now);
+
+        console.log(`Consulta ID: ${app.id} | Hora BR: ${app.startTime} | Hora UTC Calculada: ${format(appointmentDateTime, "HH:mm")} | Agora UTC: ${format(now, "HH:mm")} | Faltam: ${minutesUntil} min`);
 
         if (minutesUntil >= 0 && minutesUntil <= 20) {
           
