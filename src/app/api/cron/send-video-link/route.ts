@@ -1,12 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/providers/prisma";
 import { sendVideoLink } from "@/lib/whatsapp";
-import { startOfDay, 
-    endOfDay, 
-    format, 
-    differenceInMinutes, 
-    parse, 
-    addHours } from "date-fns";
+import { startOfDay, endOfDay, format, differenceInMinutes, parse, addHours } from "date-fns";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +18,7 @@ export async function GET(req: NextRequest) {
 
     const appointments = await prisma.appointment.findMany({
       where: {
-        date: { gte: todayStart, lte: todayEnd }, 
+        date: { gte: todayStart, lte: todayEnd },
         status: "CONFIRMED",
         videoUrl: { not: null }, 
         videoLinkSent: false,    
@@ -32,6 +27,7 @@ export async function GET(req: NextRequest) {
     });
 
     if (appointments.length === 0) {
+      console.log("CRON VIDEO: Nenhuma consulta confirmada com video pendente hoje.");
       return NextResponse.json({ message: "Nenhum link pendente." });
     }
 
@@ -52,9 +48,12 @@ export async function GET(req: NextRequest) {
 
         const minutesUntil = differenceInMinutes(appointmentDateTime, now);
 
-        console.log(`Consulta ID: ${app.id} | Hora BR: ${app.startTime} | Hora UTC Calculada: ${format(appointmentDateTime, "HH:mm")} | Agora UTC: ${format(now, "HH:mm")} | Faltam: ${minutesUntil} min`);
+        console.log(`🔎 Check ID: ${app.id} | Hora: ${app.startTime} | Faltam: ${minutesUntil} min`);
 
-        if (minutesUntil >= 0 && minutesUntil <= 20) {
+
+        if (minutesUntil >= -20 && minutesUntil <= 40) {
+          
+          console.log(`🚀 Enviando para ${app.startTime}...`);
           
           const phone = app.patientPhone || app.user.phone;
           const patientName = app.patientName || app.user.name || "Paciente";
@@ -69,9 +68,12 @@ export async function GET(req: NextRequest) {
                });
                sentCount++;
              } else {
+               console.error(`❌ Falha no envio WhatsApp para ${app.id}`);
                errors++;
              }
           }
+        } else {
+            console.log(`g Pulei: Fora da janela (-20 a 40 min)`);
         }
       } catch (err) {
         console.error(`Erro ao processar consulta ${app.id}:`, err);
