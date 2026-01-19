@@ -5,11 +5,35 @@ import { authOptions } from "@/lib/auth-config";
 import { startOfDay, endOfDay, parseISO, subMonths, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
+const REASON_MAP: Record<string, string> = {
+  "TIMEOUT_PAYMENT": "Pagamento Expirado",
+  "MANUAL_ADMIN": "Cancelado pelo Admin",
+  "MANUAL_DOCTOR": "Cancelado pelo Médico",
+  "MANUAL_PATIENT": "Cancelado pelo Paciente",
+  "CANCELLATION_REQUESTED": "Solicitação em Análise",
+  "MANUAL_ADMIN_REFUND_SUCCESS": "Admin (Reembolso Efetuado)",
+  "REQUEST_REVIEW_APPROVE": "Solicitação Aprovada",
+  "REFUND_NOT_APPLICABLE": "Cancelado (Sem Reembolso)",
+  "REQUEST_REVIEW_REJECT": "Solicitação Rejeitada",
+  "REQUEST_REVIEW_APPROVE_REFUND_NOT_APPLICABLE": "Solicitação Aprovada (Sem Reembolso)",
+  "USER_REQUEST": "Solicitado pelo Usuário",
+  "SYSTEM_ERROR": "Erro no Sistema",
+  "NO_SHOW": "Não Compareceu"
+};
+
+function formatReasonText(reason: string | null): string {
+  if (!reason) return "Não especificado";
+  if (REASON_MAP[reason]) return REASON_MAP[reason];
+  return reason
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+}
+
 export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     
-    // 1. Permissão: ADMIN ou DOCTOR
     if (!session || (session.user.role !== "ADMIN" && session.user.role !== "DOCTOR")) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
@@ -26,32 +50,32 @@ export async function GET(req: NextRequest) {
       targetDoctorId = queryDoctorId;
     }
 
-    // 3. Filtros de Data
     const dateFilter: any = {};
     if (dateStart) dateFilter.gte = startOfDay(parseISO(dateStart));
     if (dateEnd) dateFilter.lte = endOfDay(parseISO(dateEnd));
 
-    // 4. Filtro Comum (Usado para Agendamentos e Histórico)
     const whereCommon = {
       ...(targetDoctorId ? { doctorId: targetDoctorId } : {}),
       ...(Object.keys(dateFilter).length > 0 ? { date: dateFilter } : {}),
     };
 
-    // --- A. DADOS GERAIS (Cards do Topo) ---
-
-    // Faturamento Total (Filtrado por Médico e Data do Agendamento)
-    const payments = await prisma.payment.aggregate({
+    // --- A. DADOS FINANCEIROS GERAIS ---
+    const revenue = await prisma.payment.aggregate({
       _sum: { amount: true },
       where: {
         status: { in: ["APPROVED", "CONFIRMED"] },
-        appointment: whereCommon, // Filtra pagamentos cujos agendamentos batem com o filtro
+        appointment: whereCommon,
       }
     });
 
-    // Total de Pacientes (Se for médico, conta pacientes únicos atendidos por ele)
+    const lostRevenue = await prisma.appointment.aggregate({
+        _sum: { amount: true },
+        where: { ...whereCommon, status: "CANCELLED" }
+    });
+
+    // --- B. TOTAL DE PACIENTES E AGENDAMENTOS ---
     let totalPatients = 0;
     if (targetDoctorId) {
-        // Conta quantos pacientes distintos esse médico já atendeu
         const uniquePatients = await prisma.appointment.findMany({
             where: { doctorId: targetDoctorId },
             distinct: ['userId'],
@@ -59,67 +83,78 @@ export async function GET(req: NextRequest) {
         });
         totalPatients = uniquePatients.length;
     } else {
-        totalPatients = await prisma.user.count({
-            where: { role: "USER" }
+        totalPatients = await prisma.user.count({ where: { role: "USER" } });
+    }
+
+    const totalAppointments = await prisma.appointment.count({ where: whereCommon });
+    
+    // --- C. MOTIVOS DE CANCELAMENTO ---
+    const rawCancellationReasons = await prisma.appointmentHistory.groupBy({
+        by: ['reason'],
+        where: { ...whereCommon, status: "CANCELLED" },
+        _count: { reason: true }
+    });
+
+    const cancellationReasons = rawCancellationReasons.map(item => ({
+        name: formatReasonText(item.reason),
+        value: item._count.reason
+    }));
+
+    // --- D. DADOS MENSAIS ---
+    const monthlyData = [];
+    for (let i = 5; i >= 0; i--) {
+        const date = subMonths(new Date(), i);
+        const monthStart = startOfDay(new Date(date.getFullYear(), date.getMonth(), 1));
+        const monthEnd = endOfDay(new Date(date.getFullYear(), date.getMonth() + 1, 0));
+        
+        const monthlyRevenue = await prisma.payment.aggregate({
+            _sum: { amount: true },
+            where: {
+                status: { in: ["APPROVED", "CONFIRMED"] },
+                createdAt: { gte: monthStart, lte: monthEnd },
+                ...(targetDoctorId ? { appointment: { doctorId: targetDoctorId } } : {})
+            }
+        });
+
+        const monthlyLost = await prisma.appointment.aggregate({
+            _sum: { amount: true },
+            where: {
+                status: "CANCELLED",
+                updatedAt: { gte: monthStart, lte: monthEnd },
+                ...(targetDoctorId ? { doctorId: targetDoctorId } : {})
+            }
+        });
+        
+        monthlyData.push({
+            name: format(date, 'MMM', { locale: ptBR }),
+            revenue: Number(monthlyRevenue._sum.amount || 0),
+            lost: Number(monthlyLost._sum.amount || 0)
         });
     }
 
-    // Total de Agendamentos Ativos (No filtro)
-    const totalActiveAppointmentsCount = await prisma.appointment.count({
-        where: whereCommon
+    // --- E. PERFORMANCE POR MÉDICO (ATUALIZADO COM CÁLCULO DE RECEITA) ---
+    const appointmentsForStats = await prisma.appointment.findMany({
+        where: whereCommon,
+        select: { doctorId: true, status: true, amount: true }
     });
 
-    // --- B. BUSCAR DADOS PARA GRÁFICOS E TABELAS ---
-
-    // Agendamentos Ativos/Concluídos
-    const activeAppointments = await prisma.appointment.findMany({
-      where: {
-        ...whereCommon,
-        status: { in: ["CONFIRMED", "COMPLETED"] }
-      },
-      select: { id: true, doctorId: true, status: true }
-    });
-
-    // Histórico de Cancelamentos
-    const historyAppointments = await prisma.appointmentHistory.findMany({
-      where: {
-        ...whereCommon,
-        status: "CANCELLED" // Filtra explicitamente apenas cancelados
-      },
-      select: { id: true, doctorId: true, reason: true, status: true }
-    });
-
-    // --- C. PROCESSAMENTO DOS DADOS ---
-
-    // Agrupar motivos de cancelamento para o Gráfico de Pizza
-    const cancellationReasons = {
-      timeout: historyAppointments.filter(a => a.reason === "TIMEOUT_PAYMENT").length,
-      manualAdmin: historyAppointments.filter(a => a.reason === "MANUAL_ADMIN").length,
-      manualDoctor: historyAppointments.filter(a => a.reason === "MANUAL_DOCTOR").length,
-      manualPatient: historyAppointments.filter(a => a.reason === "MANUAL_PATIENT").length,
-    };
-
-    // Agrupar performance por médico para a Tabela
     const byDoctor: Record<string, any> = {};
     
-    const initDoc = (id: string) => {
-        if (!byDoctor[id]) byDoctor[id] = { attended: 0, cancelledTotal: 0, cancelledByMe: 0 };
+    // Agora inicializamos revenueAmount (receita confirmada) também
+    const initDoc = (id: string) => { 
+        if (!byDoctor[id]) byDoctor[id] = { attended: 0, revenueAmount: 0, cancelledTotal: 0, lostAmount: 0 }; 
     }
 
-    // Computar Atendidos
-    activeAppointments.forEach(app => {
+    appointmentsForStats.forEach(app => {
         const docId = app.doctorId || "unknown";
         initDoc(docId);
-        byDoctor[docId].attended++;
-    });
-
-    // Computar Cancelados
-    historyAppointments.forEach(app => {
-        const docId = app.doctorId || "unknown";
-        initDoc(docId);
-        byDoctor[docId].cancelledTotal++;
-        if (app.reason === "MANUAL_DOCTOR") {
-            byDoctor[docId].cancelledByMe++;
+        if (["CONFIRMED", "COMPLETED"].includes(app.status)) {
+            byDoctor[docId].attended++;
+            // Somamos o valor das consultas atendidas
+            byDoctor[docId].revenueAmount += Number(app.amount || 0);
+        } else if (app.status === "CANCELLED") {
+            byDoctor[docId].cancelledTotal++;
+            byDoctor[docId].lostAmount += Number(app.amount || 0);
         }
     });
 
@@ -136,36 +171,14 @@ export async function GET(req: NextRequest) {
         ...byDoctor[doc.id]
     }));
 
-    const monthlyData = [];
-    for (let i = 5; i >= 0; i--) {
-        const date = subMonths(new Date(), i);
-        const monthStart = startOfDay(new Date(date.getFullYear(), date.getMonth(), 1));
-        const monthEnd = endOfDay(new Date(date.getFullYear(), date.getMonth() + 1, 0));
-        const monthlyRevenue = await prisma.payment.aggregate({
-            _sum: { amount: true },
-            where: {
-                status: { in: ["APPROVED", "CONFIRMED"] },
-                createdAt: { gte: monthStart, lte: monthEnd },
-                ...(targetDoctorId ? { appointment: { doctorId: targetDoctorId } } : {})
-            }
-        });
-        
-        monthlyData.push({
-            name: format(date, 'MMM', { locale: ptBR }),
-            total: Number(monthlyRevenue._sum.amount || 0)
-        });
-    }
-
     return NextResponse.json({
       summary: {
-        totalRevenue: Number(payments._sum.amount || 0),
+        totalRevenue: Number(revenue._sum.amount || 0),
+        lostRevenue: Number(lostRevenue._sum.amount || 0),
         totalPatients,
-        totalAppointments: totalActiveAppointmentsCount + historyAppointments.length,
+        totalAppointments,
       },
-      charts: {
-        cancellationReasons,
-        monthlyData
-      },
+      charts: { cancellationReasons, monthlyData },
       doctors: doctorStats
     });
 

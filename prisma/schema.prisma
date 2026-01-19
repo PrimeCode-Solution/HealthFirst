@@ -258,6 +258,7 @@ model Appointment {
 
   cancellationRequest CancellationRequest?
   reminderSent Boolean @default(false)
+  videoLinkSent Boolean @default(false)
 
   @@map("appointments")
 }

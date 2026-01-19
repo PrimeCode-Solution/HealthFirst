@@ -16,7 +16,6 @@ interface WhatsAppTemplateParams {
   components?: WhatsAppComponent[];
 }
 
-
 export async function sendWhatsAppMessage({
   to,
   templateName,
@@ -32,15 +31,12 @@ export async function sendWhatsAppMessage({
     return null;
   }
 
-
   let cleanPhone = to.replace(/\D/g, "");
-
 
   if (!cleanPhone.startsWith("55") && (cleanPhone.length === 10 || cleanPhone.length === 11)) {
     cleanPhone = `55${cleanPhone}`;
   }
   
-
   const url = `https://graph.facebook.com/${apiVersion}/${phoneId}/messages`;
 
   const payload = {
@@ -80,7 +76,6 @@ export async function sendWhatsAppMessage({
   }
 }
 
-
 export async function sendAppointmentConfirmation(
   phone: string,
   patientName: string,
@@ -101,7 +96,6 @@ export async function sendAppointmentConfirmation(
     ],
   });
 }
-
 
 export async function sendAppointmentReminder(
   phone: string, 
@@ -130,12 +124,11 @@ export async function sendVideoLink(
   patientName: string, 
   fullVideoUrl: string
 ) {
-
   const roomName = fullVideoUrl.replace("https://meet.jit.si/", "");
 
   return sendWhatsAppMessage({
     to: phone,
-    templateName: "link_videochamada",
+    templateName: "link_videochamada_v2",
     components: [
       { 
         type: "body", 
@@ -149,6 +142,34 @@ export async function sendVideoLink(
         index: "0", 
         parameters: [
           { type: "text", text: roomName } 
+        ]
+      }
+    ]
+  });
+}
+
+export async function sendPendingPixMessage(
+  phone: string,
+  patientName: string,
+  paymentLink: string
+) {
+
+  return sendWhatsAppMessage({
+    to: phone,
+    templateName: "cobranca_pix_pendente",
+    components: [
+      {
+        type: "body",
+        parameters: [
+          { type: "text", text: patientName }
+        ]
+      },
+      {
+        type: "button",
+        sub_type: "url",
+        index: "0",
+        parameters: [
+          { type: "text", text: paymentLink.replace("https://", "") } 
         ]
       }
     ]

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/providers/prisma";
-import { AppointmentStatus, PaymentStatus } from "@/generated/prisma"; 
 
 export const dynamic = 'force-dynamic';
 
@@ -16,16 +15,18 @@ export async function GET(req: NextRequest) {
 
   try {
     const now = new Date();
-    
-    const pendingTimeLimit = new Date(now.getTime() - 60 * 60 * 1000); 
-    
-    const cancelledTimeLimit = new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000); 
+    const pendingTimeLimit = new Date(now.getTime() - 20 * 60 * 1000); 
+    const cancelledTimeLimit = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000); 
 
     const pendingToDelete = await prisma.appointment.findMany({
       where: {
-        status: AppointmentStatus.PENDING, 
+        status: "PENDING", 
         createdAt: { lt: pendingTimeLimit },
-        payment: { status: PaymentStatus.PENDING }
+        OR: [
+            { payment: { is: null } },
+            { payment: { status: "PENDING" } },
+            { payment: { status: "REJECTED" } }
+        ]
       },
       include: { payment: true },
       take: 50, 
@@ -33,7 +34,7 @@ export async function GET(req: NextRequest) {
 
     const cancelledToDelete = await prisma.appointment.findMany({
       where: {
-        status: AppointmentStatus.CANCELLED,
+        status: "CANCELLED",
         updatedAt: { lt: cancelledTimeLimit } 
       },
       select: { id: true },
@@ -47,19 +48,24 @@ export async function GET(req: NextRequest) {
       if (pendingToDelete.length > 0) {
         await tx.appointmentHistory.createMany({
           data: pendingToDelete.map(app => ({
-            originalId: app.id,
+            originalId: app.id, 
+            
             userId: app.userId,
-            doctorId: app.doctorId,
+            doctorId: app.doctorId, 
             date: app.date,
             status: "CANCELLED",
-            reason: "TIMEOUT_PAYMENT", 
-            amount: app.payment?.amount || 0
+            reason: "TIMEOUT_PAYMENT",
+            notes: "Cancelado automaticamente pelo sistema (falta de pagamento)",
+            updatedBy: "SYSTEM",
+            createdAt: new Date()
           }))
         });
 
         const pendingIds = pendingToDelete.map(a => a.id);
-        await tx.appointment.deleteMany({
-          where: { id: { in: pendingIds } }
+        
+        await tx.appointment.updateMany({
+            where: { id: { in: pendingIds } },
+            data: { status: "CANCELLED" }
         });
         
         totalProcessed += pendingToDelete.length;
@@ -67,6 +73,15 @@ export async function GET(req: NextRequest) {
 
       if (cancelledToDelete.length > 0) {
         const cancelledIds = cancelledToDelete.map(a => a.id);
+        
+        await tx.payment.deleteMany({
+            where: { appointmentId: { in: cancelledIds } }
+        });
+
+        await tx.appointmentHistory.deleteMany({
+            where: { originalId: { in: cancelledIds } } 
+        });
+
         await tx.appointment.deleteMany({
             where: { id: { in: cancelledIds } }
         });
@@ -77,14 +92,14 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: "Limpeza executada com segurança",
+      message: "Limpeza executada",
       processed_pending: pendingToDelete.length,
-      processed_cancelled: cancelledToDelete.length,
+      processed_deleted: cancelledToDelete.length,
       timestamp: new Date().toISOString()
     });
 
   } catch (error: any) {
-    console.error("Erro crítico na limpeza (Cron):", error);
+    console.error("Erro crítico na limpeza:", error);
     return NextResponse.json(
       { error: "Internal Error", details: error.message }, 
       { status: 500 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/providers/prisma";
 import { addDays, startOfDay, endOfDay, format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import { sendAppointmentReminder } from "@/lib/whatsapp";
 
 export const dynamic = "force-dynamic";
@@ -46,12 +47,13 @@ export async function GET(req: NextRequest) {
       try {
         const phone = appointment.patientPhone || appointment.user.phone;
         const patientName = appointment.patientName || appointment.user.name || "Paciente";
-        const doctorName = appointment.doctor?.name || "Médico Responsável";
-        const time = appointment.startTime; 
+        const doctorName = appointment.doctor?.name || "Dr(a). Especialista";
+        
+        const timeFormatted = appointment.startTime.slice(0, 5); 
 
         if (phone) {
-          const dateFormatted = format(appointment.date, "dd/MM");
-          const dateAndHour = `${dateFormatted} às ${time}`;
+          const dateFormatted = format(appointment.date, "dd/MM 'às'", { locale: ptBR });
+          const dateAndHour = `${dateFormatted} ${timeFormatted}`;
 
           const result = await sendAppointmentReminder(
             phone,
@@ -67,9 +69,11 @@ export async function GET(req: NextRequest) {
             });
             successCount++;
           } else {
+            console.error(`Falha envio WhatsApp para ID ${appointment.id}`);
             errorCount++;
           }
         } else {
+          console.warn(`Agendamento ${appointment.id} sem telefone válido.`);
           errorCount++;
         }
       } catch (error) {
@@ -79,13 +83,14 @@ export async function GET(req: NextRequest) {
     }
 
     return NextResponse.json({
+      success: true,
       processed: appointments.length,
-      success: successCount,
-      errors: errorCount,
+      sent_success: successCount,
+      sent_errors: errorCount,
     });
 
   } catch (error: any) {
-    console.error("Erro no Cron:", error);
+    console.error("Erro no Cron de Lembretes:", error);
     return NextResponse.json({ error: "Internal Error" }, { status: 500 });
   }
 }
