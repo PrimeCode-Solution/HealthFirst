@@ -48,16 +48,13 @@ export async function GET(req: NextRequest) {
       if (pendingToDelete.length > 0) {
         await tx.appointmentHistory.createMany({
           data: pendingToDelete.map(app => ({
-            originalId: app.id, 
-            
+            originalId: app.id,       
             userId: app.userId,
-            doctorId: app.doctorId, 
+            doctorId: app.doctorId,
             date: app.date,
             status: "CANCELLED",
             reason: "TIMEOUT_PAYMENT",
-            notes: "Cancelado automaticamente pelo sistema (falta de pagamento)",
-            updatedBy: "SYSTEM",
-            createdAt: new Date()
+            amount: app.payment?.amount || 0,
           }))
         });
 
