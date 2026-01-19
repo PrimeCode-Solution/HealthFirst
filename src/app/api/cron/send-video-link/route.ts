@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/providers/prisma";
-import { sendVideoLink } from "@/lib/whatsapp";
-import { startOfDay, endOfDay, format, differenceInMinutes, parse, addHours } from "date-fns";
+import { startOfDay, endOfDay, addHours } from "date-fns";
 
 export const dynamic = "force-dynamic";
 
@@ -13,81 +12,44 @@ export async function GET(req: NextRequest) {
     }
 
     const now = new Date();
-
     const searchStart = startOfDay(addHours(now, -24)); 
     const searchEnd = endOfDay(addHours(now, 24));
 
-    const appointments = await prisma.appointment.findMany({
+    const allAppointments = await prisma.appointment.findMany({
       where: {
-        status: "CONFIRMED",
-        videoUrl: { not: null },
-        videoLinkSent: false,
         date: { gte: searchStart, lte: searchEnd }
       },
-      include: { user: true },
+      select: {
+        id: true,
+        startTime: true,
+        status: true,        
+        videoUrl: true,      
+        videoLinkSent: true, 
+        patientName: true,
+        user: { select: { name: true, phone: true } }
+      }
     });
 
-    const logs: string[] = [];
-    let sentCount = 0;
-
-    if (appointments.length === 0) {
-        return NextResponse.json({ 
-            message: "NENHUM AGENDAMENTO ENCONTRADO NO BANCO.",
-            debug: {
-                serverTimeUTC: now.toISOString(),
-                filterStart: searchStart.toISOString(),
-                filterEnd: searchEnd.toISOString()
-            }
-        });
-    }
-
-    for (const app of appointments) {
-      try {
-        const appointmentDateStr = format(app.date, "yyyy-MM-dd");
-        
-        let appointmentDateTime = parse(
-          `${appointmentDateStr} ${app.startTime}`, 
-          "yyyy-MM-dd HH:mm", 
-          new Date()
-        );
-
-        appointmentDateTime = addHours(appointmentDateTime, 3);
-        const minutesUntil = differenceInMinutes(appointmentDateTime, now);
-        
-        const logMsg = `ID: ${app.id} | Data: ${appointmentDateStr} | Hora: ${app.startTime} | Diff: ${minutesUntil}min`;
-        logs.push(logMsg);
-
-        if (minutesUntil >= -20 && minutesUntil <= 40) {
-          
-          const phone = app.patientPhone || app.user.phone;
-          const patientName = app.patientName || app.user.name || "Paciente";
-
-          if (phone && app.videoUrl) {
-             const sent = await sendVideoLink(phone, patientName, app.videoUrl);
-             if (sent) {
-               await prisma.appointment.update({
-                 where: { id: app.id },
-                 data: { videoLinkSent: true }
-               });
-               sentCount++;
-               logs.push(`--> ENVIADO SUCESSO`);
-             } else {
-               logs.push(`--> ERRO WHATSAPP`);
-             }
-          }
-        } else {
-            logs.push(`--> FORA DA JANELA (-20 a 40)`);
-        }
-      } catch (err) {
-        logs.push(`--> ERRO CATCH: ${err}`);
-      }
-    }
+    const report = allAppointments.map(app => {
+      let problem = "OK (Deveria enviar)";
+      
+      if (app.status !== "CONFIRMED") problem = `Status errado: ${app.status}`;
+      else if (!app.videoUrl) problem = "Sem Link de Vídeo (videoUrl nulo/vazio)";
+      else if (app.videoLinkSent) problem = "Já enviado (videoLinkSent = true)";
+      
+      return {
+        hora: app.startTime,
+        paciente: app.patientName || app.user.name,
+        status: app.status,
+        temLink: !!app.videoUrl,
+        jaEnviou: app.videoLinkSent,
+        DIAGNOSTICO: problem
+      };
+    });
 
     return NextResponse.json({
-      success: true,
-      found: appointments.length,
-      sent: sentCount,
-      logs: logs 
+      totalEncontrados: allAppointments.length,
+      analise: report
     });
 
   } catch (error: any) {
