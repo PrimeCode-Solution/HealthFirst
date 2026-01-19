@@ -5,8 +5,12 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get("authorization");
+  
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json(
+      { error: "Unauthorized: Invalid or missing Cron Secret" },
+      { status: 401 }
+    );
   }
 
   try {
@@ -38,19 +42,22 @@ export async function GET(req: NextRequest) {
     });
 
     await prisma.$transaction(async (tx) => {
+      
       if (pendingToDelete.length > 0) {
         await tx.appointmentHistory.createMany({
           data: pendingToDelete.map(app => ({
-            appointmentId: app.id, 
-            userId: app.userId,    
-            doctorId: app.doctorId, 
-            date: app.date,        
+            originalId: app.id,       
+            userId: app.userId,
+            doctorId: app.doctorId,
+            date: app.date,
             status: "CANCELLED",
             reason: "TIMEOUT_PAYMENT",
+            amount: app.payment?.amount || 0
           }))
         });
 
         const pendingIds = pendingToDelete.map(a => a.id);
+        
         await tx.appointment.updateMany({
             where: { id: { in: pendingIds } },
             data: { status: "CANCELLED" }
@@ -60,22 +67,32 @@ export async function GET(req: NextRequest) {
       if (cancelledToDelete.length > 0) {
         const cancelledIds = cancelledToDelete.map(a => a.id);
         
+        await tx.payment.deleteMany({
+            where: { appointmentId: { in: cancelledIds } }
+        });
 
-        try {
-            await tx.payment.deleteMany({ where: { appointmentId: { in: cancelledIds } } });
-            await tx.appointmentHistory.deleteMany({ where: { appointmentId: { in: cancelledIds } } });
-        } catch (e) {
-            console.log("Aviso: Falha ao limpar dependências (possível diferença de nome de campo)", e);
-        }
+        await tx.appointmentHistory.deleteMany({
+            where: { originalId: { in: cancelledIds } } 
+        });
 
-        await tx.appointment.deleteMany({ where: { id: { in: cancelledIds } } });
+        await tx.appointment.deleteMany({
+            where: { id: { in: cancelledIds } }
+        });
       }
     });
 
-    return NextResponse.json({ success: true, processed: pendingToDelete.length });
+    return NextResponse.json({
+      success: true,
+      processed_pending: pendingToDelete.length,
+      processed_deleted: cancelledToDelete.length,
+      timestamp: new Date().toISOString()
+    });
 
   } catch (error: any) {
     console.error("Cleanup Error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(
+      { error: "Internal Error", details: error.message }, 
+      { status: 500 }
+    );
   }
 }
