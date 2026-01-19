@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/providers/prisma";
-import { startOfDay, endOfDay, addHours } from "date-fns";
+import { sendVideoLink } from "@/lib/whatsapp";
+import { startOfDay, endOfDay, format, differenceInMinutes, parse, addHours } from "date-fns";
 
 export const dynamic = "force-dynamic";
 
@@ -12,47 +13,82 @@ export async function GET(req: NextRequest) {
     }
 
     const now = new Date();
-    const searchStart = startOfDay(addHours(now, -24)); 
-    const searchEnd = endOfDay(addHours(now, 24));
+    const todayStart = startOfDay(now);
+    const todayEnd = endOfDay(now);
 
-    const allAppointments = await prisma.appointment.findMany({
+    const appointments = await prisma.appointment.findMany({
       where: {
-        date: { gte: searchStart, lte: searchEnd }
+        date: { gte: todayStart, lte: todayEnd },
+        status: "CONFIRMED",  
+        videoUrl: { not: null }, 
+        videoLinkSent: false,    
       },
-      select: {
-        id: true,
-        startTime: true,
-        status: true,        
-        videoUrl: true,      
-        videoLinkSent: true, 
-        patientName: true,
-        user: { select: { name: true, phone: true } }
-      }
+      include: { user: true },
     });
 
-    const report = allAppointments.map(app => {
-      let problem = "OK (Deveria enviar)";
-      
-      if (app.status !== "CONFIRMED") problem = `Status errado: ${app.status}`;
-      else if (!app.videoUrl) problem = "Sem Link de Vídeo (videoUrl nulo/vazio)";
-      else if (app.videoLinkSent) problem = "Já enviado (videoLinkSent = true)";
-      
-      return {
-        hora: app.startTime,
-        paciente: app.patientName || app.user.name,
-        status: app.status,
-        temLink: !!app.videoUrl,
-        jaEnviou: app.videoLinkSent,
-        DIAGNOSTICO: problem
-      };
-    });
+    if (appointments.length === 0) {
+      console.log("CRON VIDEO: Nenhum agendamento confirmado pendente de envio.");
+      return NextResponse.json({ message: "Nenhum link pendente." });
+    }
+
+    let sentCount = 0;
+    let errors = 0;
+
+    for (const app of appointments) {
+      try {
+        const appointmentDateStr = format(app.date, "yyyy-MM-dd");
+        
+        let appointmentDateTime = parse(
+          `${appointmentDateStr} ${app.startTime}`, 
+          "yyyy-MM-dd HH:mm", 
+          new Date()
+        );
+
+        appointmentDateTime = addHours(appointmentDateTime, 3);
+
+        const minutesUntil = differenceInMinutes(appointmentDateTime, now);
+
+        console.log(`🔎 Check ID: ${app.id} | Hora: ${app.startTime} | Faltam: ${minutesUntil} min`);
+
+        if (minutesUntil >= -20 && minutesUntil <= 40) {
+          
+          console.log(`🚀 Enviando link para ${app.startTime}...`);
+          
+          const phone = app.patientPhone || app.user.phone;
+          const patientName = app.patientName || app.user.name || "Paciente";
+
+          if (phone && app.videoUrl) {
+             const sent = await sendVideoLink(phone, patientName, app.videoUrl);
+
+             if (sent) {
+               await prisma.appointment.update({
+                 where: { id: app.id },
+                 data: { videoLinkSent: true }
+               });
+               sentCount++;
+             } else {
+               console.error(`❌ Falha no envio WhatsApp para ${app.id}`);
+               errors++;
+             }
+          }
+        } else {
+            console.log(`⏳ Aguardando janela de tempo (-20 a 40 min).`);
+        }
+      } catch (err) {
+        console.error(`Erro ao processar consulta ${app.id}:`, err);
+        errors++;
+      }
+    }
 
     return NextResponse.json({
-      totalEncontrados: allAppointments.length,
-      analise: report
+      success: true,
+      processed: appointments.length,
+      sent: sentCount,
+      errors: errors
     });
 
   } catch (error: any) {
-    return NextResponse.json({ error: "Internal Error", details: error.message }, { status: 500 });
+    console.error("Cron Video Link Error:", error);
+    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
   }
 }
