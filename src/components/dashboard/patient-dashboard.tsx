@@ -20,11 +20,14 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useState } from "react";
+import { useCompleteAppointmentMutation } from "@/presentation/appointments/mutations/useAppointmentMutations";
 
 export function PatientDashboard() {
   const { data: session } = useSession();
   const queryClient = useQueryClient();
   const [cancelId, setCancelId] = useState<string | null>(null);
+
+  const completeMutation = useCompleteAppointmentMutation();
 
   const { data: appointments, isLoading } = useQuery({
     queryKey: ["my-appointments"],
@@ -49,6 +52,13 @@ export function PatientDashboard() {
       toast.error("Erro ao cancelar. Tente novamente.");
     }
   });
+
+  const handleComplete = (apt: any) => {
+    completeMutation.mutate({
+      id: apt.id,
+      status: "COMPLETED"
+    });
+  };
 
   const upcomingAppointments = appointments?.filter((apt: any) => 
     apt.status !== 'CANCELLED' && apt.status !== 'COMPLETED'
@@ -102,7 +112,7 @@ export function PatientDashboard() {
                 currentUser={session?.user} 
                 onDelete={(id) => setCancelId(id)} 
                 onEdit={() => {}} 
-                onComplete={() => {}} 
+                onComplete={handleComplete} 
               />
             ))}
           </div>
