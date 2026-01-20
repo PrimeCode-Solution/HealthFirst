@@ -154,26 +154,29 @@ export async function sendVideoLink(
 export async function sendPendingPixMessage(
   phone: string,
   patientName: string,
-  doctorName: string, 
-  paymentLink: string
+  doctorName: string,
+  pixCode: string, 
+  pixQrCodeUrl: string 
 ) {
   return sendWhatsAppMessage({
     to: phone,
-    templateName: "cobranca_pix_pendente", 
+    templateName: "cobranca_pix_pendente",
     components: [
+      {
+        type: "header",
+        parameters: [
+          {
+            type: "image",
+            image: { link: pixQrCodeUrl } 
+          }
+        ]
+      },
       {
         type: "body",
         parameters: [
           { type: "text", text: patientName }, 
-          { type: "text", text: doctorName }   
-        ]
-      },
-      {
-        type: "button",
-        sub_type: "url",
-        index: "0",
-        parameters: [
-          { type: "text", text: paymentLink.replace(/^https?:\/\//, "") } 
+          { type: "text", text: doctorName },  
+          { type: "text", text: pixCode }      
         ]
       }
     ]

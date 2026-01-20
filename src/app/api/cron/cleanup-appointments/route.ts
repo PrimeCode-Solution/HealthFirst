@@ -16,14 +16,14 @@ export async function GET(request: Request) {
     }
 
     const timeLimit = subMinutes(new Date(), 20);
-    console.log(`🕒 [Cron Log] Buscando agendamentos anteriores a: ${timeLimit.toISOString()}`);
+    
+    // CORREÇÃO DA URL BASE (Remove barra final se existir)
+    const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://healthfirst.com.br").replace(/\/$/, "");
 
     const pendingAppointments = await prisma.appointment.findMany({
       where: {
         status: "PENDING",
-        createdAt: {
-          lt: timeLimit,
-        },
+        createdAt: { lt: timeLimit },
       },
       include: {
         user: true,
@@ -41,7 +41,7 @@ export async function GET(request: Request) {
       console.log(`👉 [Cron Log] Processando ID: ${appointment.id} | Status Atual: ${appointment.status}`);
 
       if (appointment.paymentReminderSent) {
-        console.log("   ↳ Já recebeu lembrete anteriormente. Cancelando agora...");
+        console.log("   ↳ Já recebeu lembrete. Cancelando...");
         await prisma.appointment.update({
           where: { id: appointment.id },
           data: { status: "CANCELLED" },
@@ -59,7 +59,7 @@ export async function GET(request: Request) {
       });
 
       if (hasOtherValidAppointment) {
-        console.log("   ↳ Cliente já tem outro agendamento CONFIRMED. Cancelando rascunho...");
+        console.log("   ↳ Tem outro agendamento CONFIRMED. Cancelando...");
         await prisma.appointment.update({
           where: { id: appointment.id },
           data: { status: "CANCELLED" },
@@ -69,9 +69,11 @@ export async function GET(request: Request) {
         console.log("   ↳ Enviando lembrete de pagamento...");
         
         if (appointment.patientPhone && appointment.payment?.preferenceId) {
-            
-            const checkoutLink = `${process.env.NEXT_PUBLIC_APP_URL || "https://healthfirst.com.br"}/dashboard/assinatura/processando?preferenceId=${appointment.payment.preferenceId}`;
+            // CORREÇÃO: Usa a appUrl limpa
+            const checkoutLink = `${appUrl}/dashboard/assinatura/processando?preferenceId=${appointment.payment.preferenceId}`;
             const doctorName = appointment.doctor?.name || "Clínica HealthFirst";
+
+            console.log(`   ↳ Link Gerado: ${checkoutLink}`);
 
             await sendPendingPixMessage(
                 appointment.patientPhone,
@@ -98,7 +100,6 @@ export async function GET(request: Request) {
       success: true,
       cancelled: cancelledCount,
       remindersSent: remindersSent,
-      message: `Cron finalizado. ${cancelledCount} cancelados, ${remindersSent} lembretes enviados.`,
     });
 
   } catch (error: any) {
