@@ -2,14 +2,19 @@ import { prisma } from "@/app/providers/prisma";
 
 export async function GET(
     _req: Request, 
-    props: { params: Promise<{ id: string }> } // Atualize a tipagem aqui
+    props: { params: Promise<{ id: string }> }
   ) {
     const params = await props.params;
     
     try {
         const payment = await prisma.payment.findFirst({
-            where: { appointmentId: params.id },
-            
+            where: { 
+                OR: [
+                    { appointmentId: params.id },
+                    { mercadoPagoId: params.id },
+                    { id: params.id }
+                ]
+            },
         });
 
         if(!payment) {
@@ -26,6 +31,7 @@ export async function GET(
                 currency: payment.currency,
                 description: payment.description,
                 appointmentId: payment.appointmentId,
+                mercadoPagoId: payment.mercadoPagoId 
             }),
             { status: 200, headers: { "Content-Type": "application/json" }}
         );

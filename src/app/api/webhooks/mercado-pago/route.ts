@@ -1,7 +1,6 @@
 import { paymentClient, preApprovalClient } from "@/lib/mercadopago";
 import { prisma } from "@/app/providers/prisma";
 import crypto from "crypto";
-import { NextResponse } from "next/server";
 
 function validateSignature(body: string, signature: string | null, requestId: string | null): boolean {
     const secret = process.env.MERCADO_PAGO_WEBHOOK_SECRET || process.env.MP_WEBHOOK_SECRET;
@@ -35,38 +34,33 @@ export async function POST(req: Request) {
 
         if (process.env.NODE_ENV === 'production' && process.env.MP_WEBHOOK_SECRET) {
              if (!validateSignature(bodyText, signature, requestId)) {
-                console.error("[Webhook] Assinatura inválida");
                 return new Response("Invalid Signature", { status: 401 });
              }
         }
 
         const body = JSON.parse(bodyText);
-        const { id: eventId, action, type, data } = body;
+        const { action, type, data } = body;
         const resourceId = data?.id;
 
-        if (eventId) {
-            const processedEvent = await prisma.processedWebhookEvent.findUnique({
-                where: { eventId: String(eventId) }
-            });
-
-            if (processedEvent && processedEvent.processed) {
-                return new Response("Already Processed", { status: 200 });
-            }
-        }
-
-        if (!resourceId) {
-             return new Response("No Resource ID", { status: 200 });
-        }
+        if (!resourceId) return new Response("No Resource ID", { status: 200 });
 
         await prisma.$transaction(async (tx) => {
             
-            if (action === "payment.created") {
-                console.log(`[Webhook] Payment created notificaton: ${resourceId}`);
-            }
-            
-            else if (type === "payment" || action === "payment.updated") {
-                console.log(`[Webhook] Processando pagamento ID: ${resourceId}`);
+            if (type === "subscription_preapproval") {
+                const sub = await preApprovalClient.get({ id: resourceId });
                 
+                let status = "INACTIVE";
+                if (sub.status === "authorized") status = "ACTIVE";
+                else if (sub.status === "cancelled") status = "CANCELLED";
+                else if (sub.status === "paused") status = "INACTIVE";
+
+                await tx.subscription.updateMany({
+                    where: { preapprovalId: String(resourceId) },
+                    data: { status: status as any }
+                });
+            }
+
+            else if (type === "payment" || action?.startsWith("payment.")) {
                 const payment = await paymentClient.get({ id: resourceId });
                 
                 let status = "PENDING";
@@ -75,136 +69,103 @@ export async function POST(req: Request) {
                 else if (payment.status === "cancelled") status = "CANCELLED";
                 else if (payment.status === "refunded") status = "REFUNDED";
 
+                const externalRef = payment.external_reference;
+
                 let dbPayment = await tx.payment.findFirst({
                     where: { 
                         OR: [
-                            { mercadoPagoId: String(resourceId) }, 
-                            { appointmentId: payment.external_reference }
-                        ] 
+                            { mercadoPagoId: String(resourceId) },
+                            { appointmentId: externalRef }
+                        ]
                     }
                 });
 
                 if (dbPayment) {
-                    console.log(`[Webhook] Pagamento encontrado. Atualizando...`);
-                    
                     await tx.payment.update({
                         where: { id: dbPayment.id },
                         data: { 
                             status: status as any, 
-                            mercadoPagoId: String(resourceId), 
-                            paidAt: status === "CONFIRMED" ? new Date() : dbPayment.paidAt 
+                            mercadoPagoId: String(resourceId),
+                            paidAt: status === "CONFIRMED" ? new Date() : dbPayment.paidAt
                         }
                     });
 
                     if (dbPayment.appointmentId) {
-                         if (status === "CONFIRMED") {
+                        if (status === "CONFIRMED") {
                             await tx.appointment.update({
                                 where: { id: dbPayment.appointmentId },
                                 data: { status: "CONFIRMED" }
                             });
-                            console.log(`[Webhook] Agendamento ${dbPayment.appointmentId} confirmado!`);
-                         } else if (status === "REJECTED" || status === "CANCELLED") {
-                            await tx.appointment.update({ where: { id: dbPayment.appointmentId }, data: { status: "CANCELLED" } });
-                         }
+                        } else if (status === "CANCELLED" || status === "REJECTED") {
+                             await tx.appointment.update({
+                                where: { id: dbPayment.appointmentId },
+                                data: { status: "CANCELLED" }
+                            });
+                        }
                     }
                 } 
-                
                 else {
-                    const possibleAppointmentId = payment.external_reference;
                     
-                    if (possibleAppointmentId) {
-                        console.log(`[Webhook] Buscando agendamento: ${possibleAppointmentId}`);
-                        
-                        const appointment = await tx.appointment.findUnique({
-                            where: { id: possibleAppointmentId }
+                    const appointment = externalRef ? await tx.appointment.findUnique({ where: { id: externalRef } }) : null;
+
+                    if (appointment) {
+                        await tx.payment.create({
+                            data: {
+                                mercadoPagoId: String(resourceId),
+                                amount: payment.transaction_amount || 0,
+                                currency: "BRL",
+                                description: payment.description || "Consulta",
+                                status: status as any,
+                                appointmentId: appointment.id,
+                                payerEmail: payment.payer?.email,
+                                paidAt: status === "CONFIRMED" ? new Date() : null
+                            }
                         });
 
-                        if (appointment) {
-                            await tx.payment.create({
-                                data: {
-                                    mercadoPagoId: String(resourceId),
-                                    amount: payment.transaction_amount || 0,
-                                    currency: payment.currency_id || "BRL",
-                                    description: payment.description || "Pagamento de Consulta", 
-                                    status: status as any,
-                                    paymentMethod: payment.payment_method_id || "unknown",
-                                    payerEmail: payment.payer?.email || "unknown",
-                                    appointmentId: appointment.id,
-                                    paidAt: status === "CONFIRMED" ? new Date() : null
-                                }
+                        if (status === "CONFIRMED") {
+                            await tx.appointment.update({
+                                where: { id: appointment.id },
+                                data: { status: "CONFIRMED" }
+                            });
+                        }
+                    } else {
+                        const subscriptionId = payment.metadata?.subscription_id || payment.external_reference;
+                        if (subscriptionId) {
+                            const subscription = await tx.subscription.findFirst({
+                                where: { OR: [{ preapprovalId: subscriptionId }, { userId: payment.external_reference }] }
                             });
 
-                            if (status === "CONFIRMED") {
-                                await tx.appointment.update({
-                                    where: { id: appointment.id },
-                                    data: { status: "CONFIRMED" }
+                            if (subscription) {
+                                await tx.payment.create({
+                                    data: {
+                                        mercadoPagoId: String(resourceId),
+                                        amount: payment.transaction_amount || 0,
+                                        currency: "BRL",
+                                        description: "Mensalidade Assinatura",
+                                        status: status as any,
+                                        subscriptionId: subscription.id,
+                                        payerEmail: payment.payer?.email,
+                                        paidAt: status === "CONFIRMED" ? new Date() : null
+                                    }
                                 });
-                                console.log(`[Webhook] Pagamento criado e Agendamento confirmado!`);
+
+                                if (status === "CONFIRMED") {
+                                    await tx.subscription.update({
+                                        where: { id: subscription.id },
+                                        data: { status: 'ACTIVE' }
+                                    });
+                                }
                             }
-                        } else {
-                             const subscriptionId = payment.metadata?.subscription_id || payment.external_reference; 
-                             if (subscriptionId) {
-                                 const subscription = await tx.subscription.findFirst({
-                                     where: { OR: [{ preapprovalId: subscriptionId }, { userId: payment.external_reference }] }
-                                 });
-         
-                                 if (subscription) {
-                                     await tx.payment.create({
-                                         data: {
-                                             mercadoPagoId: String(resourceId),
-                                             amount: payment.transaction_amount || 0,
-                                             currency: payment.currency_id || "BRL",
-                                             description: payment.description || "Mensalidade Assinatura",
-                                             status: "CONFIRMED",
-                                             paymentMethod: payment.payment_method_id,
-                                             payerEmail: payment.payer?.email,
-                                             subscriptionId: subscription.id,
-                                             paidAt: new Date()
-                                         }
-                                     });
-                                     
-                                     await tx.subscription.update({
-                                         where: { id: subscription.id },
-                                         data: { status: 'ACTIVE' }
-                                     });
-                                 }
-                             }
                         }
                     }
                 }
-            }
-
-            else if (type === "subscription_preapproval") {
-                const sub = await preApprovalClient.get({ id: resourceId });
-                let status = "INACTIVE";
-                if (sub.status === "authorized") status = "ACTIVE";
-                else if (sub.status === "cancelled") status = "CANCELLED";
-                
-                await tx.subscription.updateMany({
-                    where: { preapprovalId: String(resourceId) },
-                    data: { status: status as any }
-                });
-            }
-
-            if (eventId) {
-                await tx.processedWebhookEvent.upsert({
-                    where: { eventId: String(eventId) },
-                    update: { processed: true, processedAt: new Date() },
-                    create: {
-                        eventId: String(eventId),
-                        type: type || "unknown",
-                        action: action || "unknown",
-                        processed: true,
-                        processedAt: new Date()
-                    }
-                });
             }
         });
 
         return new Response("OK", { status: 200 });
 
     } catch (error) {
-        console.error("Webhook Error:", error);
+        console.error("[Webhook] Error:", error); 
         return new Response("Internal Server Error", { status: 500 });
     }
 }

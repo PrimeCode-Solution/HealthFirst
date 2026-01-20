@@ -34,6 +34,9 @@ export function DoctorDashboard() {
       const response = await api.get("/dashboard/stats");
       return response.data;
     },
+
+    refetchInterval: 5000, 
+    refetchOnWindowFocus: true,
   });
 
   const summary = data?.metrics || {

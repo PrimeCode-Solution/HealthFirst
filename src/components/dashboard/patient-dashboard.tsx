@@ -32,6 +32,8 @@ export function PatientDashboard() {
       const res = await api.get("/appointments?pageSize=100");
       return res.data.items;
     },
+    refetchInterval: 5000, 
+    refetchOnWindowFocus: true, 
   });
 
   const cancelMutation = useMutation({

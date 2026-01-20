@@ -34,7 +34,8 @@ export function AdminDashboard() {
     queryFn: async () => {
       const res = await api.get("/users?role=DOCTOR");
       return res.data.data.users;
-    }
+    },
+    refetchInterval: 10000,
   });
 
   const { data: analytics, isLoading, refetch } = useQuery({
