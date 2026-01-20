@@ -151,10 +151,9 @@ export async function sendVideoLink(
 export async function sendPendingPixMessage(
   phone: string,
   patientName: string,
+  doctorName: string, 
   paymentLink: string
 ) {
-
-  const cleanLink = paymentLink.replace(/^https?:\/\//, "");
 
   return sendWhatsAppMessage({
     to: phone,
@@ -163,15 +162,16 @@ export async function sendPendingPixMessage(
       {
         type: "body",
         parameters: [
-          { type: "text", text: patientName }
+          { type: "text", text: patientName },      
+          { type: "text", text: doctorName }        
         ]
       },
       {
         type: "button",
-        sub_type: "url",
-        index: "0", 
+        sub_type: "url", 
+        index: "0",
         parameters: [
-          { type: "text", text: cleanLink } 
+          { type: "text", text: paymentLink.replace("https://", "").replace("http://", "") } 
         ]
       }
     ]
