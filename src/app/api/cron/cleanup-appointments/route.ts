@@ -23,7 +23,8 @@ export async function GET(request: Request) {
       },
       include: {
         user: true,
-        payment: true, 
+        payment: true,
+        doctor: true, 
       },
     });
 
@@ -44,7 +45,7 @@ export async function GET(request: Request) {
         where: {
           userId: appointment.userId,
           id: { not: appointment.id },
-          status: { in: ["CONFIRMED"] },
+          status: "CONFIRMED",
         },
       });
 
@@ -55,14 +56,16 @@ export async function GET(request: Request) {
         });
         cancelledCount++;
       } else {
-        // CORREÇÃO AQUI: Verifica se existe 'payment' e 'preferenceId' dentro dele
         if (appointment.patientPhone && appointment.payment?.preferenceId) {
             
             const checkoutLink = `${process.env.NEXT_PUBLIC_APP_URL || "https://seusite.com"}/dashboard/assinatura/processando?preferenceId=${appointment.payment.preferenceId}`;
             
+            const doctorName = appointment.doctor?.name || "Clínica HealthFirst";
+
             await sendPendingPixMessage(
                 appointment.patientPhone,
                 appointment.patientName,
+                doctorName, 
                 checkoutLink
             );
         }
