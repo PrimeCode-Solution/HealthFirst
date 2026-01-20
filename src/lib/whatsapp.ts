@@ -27,12 +27,11 @@ export async function sendWhatsAppMessage({
   const token = process.env.WHATSAPP_API_TOKEN;
 
   if (!phoneId || !token) {
-    console.error("❌ Erro: Credenciais do WhatsApp ausentes no .env");
+    console.error("❌ [WhatsApp Log] Erro: Credenciais ausentes no .env");
     return null;
   }
 
   let cleanPhone = to.replace(/\D/g, "");
-
   if (!cleanPhone.startsWith("55") && (cleanPhone.length === 10 || cleanPhone.length === 11)) {
     cleanPhone = `55${cleanPhone}`;
   }
@@ -45,12 +44,13 @@ export async function sendWhatsAppMessage({
     type: "template",
     template: {
       name: templateName,
-      language: {
-        code: languageCode,
-      },
+      language: { code: languageCode },
       components: components || [],
     },
   };
+
+  console.log(`🚀 [WhatsApp Log] Enviando para ${cleanPhone} | Template: ${templateName}`);
+  console.log("📦 [WhatsApp Log] Payload Completo:", JSON.stringify(payload, null, 2));
 
   try {
     const response = await fetch(url, {
@@ -64,14 +64,17 @@ export async function sendWhatsAppMessage({
 
     const data = await response.json();
 
+    console.log(`📡 [WhatsApp Log] Status HTTP: ${response.status}`);
+    console.log("📩 [WhatsApp Log] Resposta da Meta:", JSON.stringify(data, null, 2));
+
     if (!response.ok) {
-      console.error("❌ Erro Meta API:", JSON.stringify(data, null, 2));
+      console.error("❌ [WhatsApp Log] ERRO NA API:", JSON.stringify(data, null, 2));
       return null;
     }
 
     return data;
   } catch (error) {
-    console.error("❌ Falha crítica no envio do WhatsApp:", error);
+    console.error("❌ [WhatsApp Log] Falha crítica no fetch:", error);
     return null; 
   }
 }
@@ -154,7 +157,6 @@ export async function sendPendingPixMessage(
   doctorName: string, 
   paymentLink: string
 ) {
-
   return sendWhatsAppMessage({
     to: phone,
     templateName: "cobranca_pix_pendente", 
@@ -162,16 +164,16 @@ export async function sendPendingPixMessage(
       {
         type: "body",
         parameters: [
-          { type: "text", text: patientName },      
-          { type: "text", text: doctorName }        
+          { type: "text", text: patientName }, 
+          { type: "text", text: doctorName }   
         ]
       },
       {
         type: "button",
-        sub_type: "url", 
+        sub_type: "url",
         index: "0",
         parameters: [
-          { type: "text", text: paymentLink.replace("https://", "").replace("http://", "") } 
+          { type: "text", text: paymentLink.replace(/^https?:\/\//, "") } 
         ]
       }
     ]

@@ -4,9 +4,10 @@ import { prisma } from "@/app/providers/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-config";
 import { AppointmentStatus, PaymentStatus } from "@/generated/prisma"; 
-import { parseISO, isValid as isValidDate, startOfDay, endOfDay, format } from "date-fns"; // Adicionado format
+import { parseISO, isValid as isValidDate, startOfDay, endOfDay, format } from "date-fns";
+import { ptBR } from "date-fns/locale"; // <--- ADICIONADO: Faltava isso!
 import { z } from "zod";
-import { sendAppointmentConfirmation } from "@/lib/whatsapp"; // <--- IMPORT NOVO
+import { sendAppointmentConfirmation } from "@/lib/whatsapp";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +18,6 @@ const client = new MercadoPagoConfig({
 });
 const preference = new Preference(client);
 
-// --- Schema de Validação para o GET ---
 const querySchema = z.object({
   status: z.string().optional(),
   dateStart: z.string().optional(),
@@ -31,7 +31,6 @@ const querySchema = z.object({
     }),
 });
 
-// GET: Listar Agendamentos
 export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -141,8 +140,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-  
-    // Recebemos 'consultationTypeId' (ID do banco) em vez de 'type' (Enum fixo)
+    
     const { 
       date, startTime, endTime, consultationTypeId, description, 
       patientEmail, patientPhone, doctorId, 
@@ -153,10 +151,9 @@ export async function POST(req: NextRequest) {
     if (!patientName && name) patientName = name;
 
     if (!date || !consultationTypeId) {
-      return NextResponse.json({ error: "Dados obrigatórios (data ou tipo de consulta) faltando." }, { status: 400 });
+      return NextResponse.json({ error: "Dados obrigatórios faltando." }, { status: 400 });
     }
 
-    // 1. BUSCAR O TIPO E O PREÇO NO BANCO (Validação de Segurança)
     const consultationType = await prisma.consultationType.findUnique({
       where: { id: consultationTypeId }
     });
@@ -165,8 +162,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Tipo de consulta inválido." }, { status: 400 });
     }
 
-    const amount = Number(consultationType.price); // Usar o preço oficial do banco
-
+    const amount = Number(consultationType.price);
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
     // Definição de Usuário e Paciente
@@ -178,11 +174,10 @@ export async function POST(req: NextRequest) {
     const isAdminOrDoctor = session.user.role === "ADMIN" || session.user.role === "DOCTOR";
 
     if (isAdminOrDoctor) {
-      if (userId) finalUserId = userId; // Admin pode agendar para outros users
+      if (userId) finalUserId = userId; 
       if (!finalPatientName) finalPatientName = session.user.name; 
       finalPatientEmail = patientEmail || null; 
     } else {
-      // Usuário comum sempre agenda pra si mesmo
       finalUserId = session.user.id;
       finalPatientName = session.user.name; 
       finalPatientEmail = session.user.email;
@@ -190,7 +185,6 @@ export async function POST(req: NextRequest) {
 
     if (!finalPatientName) finalPatientName = "Paciente";
 
-    // 2. TRANSAÇÃO: Criar Agendamento + Pagamento
     const { appointment, payment } = await prisma.$transaction(async (tx) => {
       const userExists = await tx.user.findUnique({ where: { id: finalUserId }});
       if (!userExists) {
@@ -203,9 +197,7 @@ export async function POST(req: NextRequest) {
             doctorId: doctorId,
             date: parseISO(date),
             startTime: startTime,
-            status: {
-              notIn: [AppointmentStatus.CANCELLED] 
-            }
+            status: { notIn: [AppointmentStatus.CANCELLED] }
           }
         });
 
@@ -213,8 +205,6 @@ export async function POST(req: NextRequest) {
           throw new Error("CONFLICT_ERROR");
         }
       }
-
-      const appointmentId = crypto.randomUUID();
 
       const newAppointment = await tx.appointment.create({
         data: {
@@ -224,9 +214,8 @@ export async function POST(req: NextRequest) {
           startTime,
           endTime,
           consultationTypeId: consultationType.id, 
-          amount: amount,                               
-          
-          status: AppointmentStatus.PENDING,
+          amount: amount,
+          status: AppointmentStatus.PENDING, 
           patientName: finalPatientName,
           patientEmail: finalPatientEmail,
           patientPhone: finalPatientPhone || null,
@@ -261,17 +250,22 @@ export async function POST(req: NextRequest) {
       }
 
       if (phoneToSend) {
-        const dateFormatted = format(parseISO(date), "dd/MM/yyyy");
-        
-        console.log(`📱 [WhatsApp] Enviando confirmação para ${phoneToSend}...`);
-        
-        await sendAppointmentConfirmation(
-          phoneToSend,
-          finalPatientName,
-          `${dateFormatted} às ${startTime}`
-        );
-        
-        console.log("✅ [WhatsApp] Mensagem enviada com sucesso!");
+        console.log(`🔎 [WhatsApp Check] Status: ${appointment.status} | Phone: ${phoneToSend}`);
+
+        if (appointment.status === "CONFIRMED") {
+            console.log(`📱 [WhatsApp] Enviando confirmação para ${phoneToSend}...`);
+            
+            await sendAppointmentConfirmation(
+                phoneToSend, 
+                finalPatientName, 
+                format(new Date(date), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
+            );
+
+            console.log("✅ [WhatsApp] Mensagem enviada com sucesso!");
+        } else {
+            console.log("⏸️ [WhatsApp] Status é PENDING. Mensagem de confirmação NÃO enviada (Correto).");
+        }
+
       } else {
         console.warn("⚠️ [WhatsApp] Telefone não encontrado para envio.");
       }
@@ -280,7 +274,6 @@ export async function POST(req: NextRequest) {
     }
     // ---------------------------------------------
 
-    // 3. INTEGRAÇÃO MERCADO PAGO
     let initPoint = null;
 
     if (mpAccessToken) {
