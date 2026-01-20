@@ -47,6 +47,9 @@ export async function POST(req: Request) {
                     number: formData.payer.identification.number,
                 },
             },
+            metadata: {
+                appointment_id: appointmentId.toString()
+            }
         };
 
         const response = await paymentClient.create({ body: paymentData });
@@ -58,9 +61,17 @@ export async function POST(req: Request) {
             data: { 
                 mercadoPagoId: response.id?.toString(),
                 status: statusBanco as any,
-                paymentMethod: formData.payment_method_id
+                paymentMethod: formData.payment_method_id,
+                paidAt: statusBanco === "CONFIRMED" ? new Date() : null
             }
         });
+
+        if (statusBanco === "CONFIRMED") {
+            await prisma.appointment.update({
+                where: { id: appointmentId },
+                data: { status: "CONFIRMED" }
+            });
+        }
 
         return new Response(JSON.stringify({
             id: response.id,

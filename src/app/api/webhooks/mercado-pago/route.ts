@@ -69,13 +69,13 @@ export async function POST(req: Request) {
                 else if (payment.status === "cancelled") status = "CANCELLED";
                 else if (payment.status === "refunded") status = "REFUNDED";
 
-                const externalRef = payment.external_reference;
+                const externalRef = payment.external_reference || payment.metadata?.appointment_id;
 
                 let dbPayment = await tx.payment.findFirst({
                     where: { 
                         OR: [
                             { mercadoPagoId: String(resourceId) },
-                            { appointmentId: externalRef }
+                            ...(externalRef ? [{ appointmentId: externalRef }] : [])
                         ]
                     }
                 });
