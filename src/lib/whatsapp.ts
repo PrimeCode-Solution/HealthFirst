@@ -154,9 +154,11 @@ export async function sendPendingPixMessage(
   paymentLink: string
 ) {
 
+  const cleanLink = paymentLink.replace(/^https?:\/\//, "");
+
   return sendWhatsAppMessage({
     to: phone,
-    templateName: "cobranca_pix_pendente",
+    templateName: "cobranca_pix_pendente", 
     components: [
       {
         type: "body",
@@ -167,9 +169,9 @@ export async function sendPendingPixMessage(
       {
         type: "button",
         sub_type: "url",
-        index: "0",
+        index: "0", 
         parameters: [
-          { type: "text", text: paymentLink.replace("https://", "") } 
+          { type: "text", text: cleanLink } 
         ]
       }
     ]

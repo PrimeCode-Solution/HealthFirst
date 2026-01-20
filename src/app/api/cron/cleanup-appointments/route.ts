@@ -1,98 +1,90 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { prisma } from "@/app/providers/prisma";
+import { subMinutes } from "date-fns";
+import { sendPendingPixMessage } from "@/lib/whatsapp";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
-export async function GET(req: NextRequest) {
-  const authHeader = req.headers.get("authorization");
-  
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json(
-      { error: "Unauthorized: Invalid or missing Cron Secret" },
-      { status: 401 }
-    );
-  }
-
+export async function GET(request: Request) {
   try {
-    const now = new Date();
-    const pendingTimeLimit = new Date(now.getTime() - 20 * 60 * 1000); 
-    const cancelledTimeLimit = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000); 
+    const authHeader = request.headers.get("authorization");
+    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-    const pendingToDelete = await prisma.appointment.findMany({
+    const timeLimit = subMinutes(new Date(), 20);
+
+    const pendingAppointments = await prisma.appointment.findMany({
       where: {
-        status: "PENDING", 
-        createdAt: { lt: pendingTimeLimit },
-        OR: [
-            { payment: { is: null } },
-            { payment: { status: "PENDING" } },
-            { payment: { status: "REJECTED" } }
-        ]
+        status: "PENDING",
+        createdAt: {
+          lt: timeLimit,
+        },
       },
-      include: { payment: true },
-      take: 50, 
+      include: {
+        user: true,
+        payment: true, 
+      },
     });
 
-    const cancelledToDelete = await prisma.appointment.findMany({
-      where: {
-        status: "CANCELLED",
-        updatedAt: { lt: cancelledTimeLimit } 
-      },
-      select: { id: true },
-      take: 50
-    });
+    let cancelledCount = 0;
+    let remindersSent = 0;
 
-    await prisma.$transaction(async (tx) => {
-      
-      if (pendingToDelete.length > 0) {
-        await tx.appointmentHistory.createMany({
-          data: pendingToDelete.map(app => ({
-            originalId: app.id,       
-            userId: app.userId,
-            doctorId: app.doctorId,
-            date: app.date,
-            status: "CANCELLED",
-            reason: "TIMEOUT_PAYMENT",
-            amount: app.payment?.amount || 0
-          }))
+    for (const appointment of pendingAppointments) {
+      if (appointment.paymentReminderSent) {
+        await prisma.appointment.update({
+          where: { id: appointment.id },
+          data: { status: "CANCELLED" },
         });
-
-        const pendingIds = pendingToDelete.map(a => a.id);
-        
-        await tx.appointment.updateMany({
-            where: { id: { in: pendingIds } },
-            data: { status: "CANCELLED" }
-        });
+        cancelledCount++;
+        continue;
       }
 
-      if (cancelledToDelete.length > 0) {
-        const cancelledIds = cancelledToDelete.map(a => a.id);
+      const hasOtherValidAppointment = await prisma.appointment.findFirst({
+        where: {
+          userId: appointment.userId,
+          id: { not: appointment.id },
+          status: { in: ["CONFIRMED"] },
+        },
+      });
+
+      if (hasOtherValidAppointment) {
+        await prisma.appointment.update({
+          where: { id: appointment.id },
+          data: { status: "CANCELLED" },
+        });
+        cancelledCount++;
+      } else {
+        // CORREÇÃO AQUI: Verifica se existe 'payment' e 'preferenceId' dentro dele
+        if (appointment.patientPhone && appointment.payment?.preferenceId) {
+            
+            const checkoutLink = `${process.env.NEXT_PUBLIC_APP_URL || "https://seusite.com"}/dashboard/assinatura/processando?preferenceId=${appointment.payment.preferenceId}`;
+            
+            await sendPendingPixMessage(
+                appointment.patientPhone,
+                appointment.patientName,
+                checkoutLink
+            );
+        }
+
+        await prisma.appointment.update({
+          where: { id: appointment.id },
+          data: { paymentReminderSent: true },
+        });
         
-        await tx.payment.deleteMany({
-            where: { appointmentId: { in: cancelledIds } }
-        });
-
-        await tx.appointmentHistory.deleteMany({
-            where: { originalId: { in: cancelledIds } } 
-        });
-
-        await tx.appointment.deleteMany({
-            where: { id: { in: cancelledIds } }
-        });
+        remindersSent++;
       }
-    });
+    }
 
     return NextResponse.json({
       success: true,
-      processed_pending: pendingToDelete.length,
-      processed_deleted: cancelledToDelete.length,
-      timestamp: new Date().toISOString()
+      cancelled: cancelledCount,
+      remindersSent: remindersSent,
+      message: `Cron finalizado. ${cancelledCount} cancelados, ${remindersSent} lembretes enviados.`,
     });
 
   } catch (error: any) {
-    console.error("Cleanup Error:", error);
-    return NextResponse.json(
-      { error: "Internal Error", details: error.message }, 
-      { status: 500 }
-    );
+    console.error("Erro no cron:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
