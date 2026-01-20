@@ -1,108 +1,52 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/providers/prisma";
-import { subMinutes } from "date-fns";
-import { sendPendingPixMessage } from "@/lib/whatsapp";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   try {
-    const authHeader = request.headers.get("authorization");
-    console.log("🕒 [Cron Log] Iniciando limpeza de agendamentos...");
-
-    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-      console.error("🔒 [Cron Log] Falha de autenticação");
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const timeLimit = subMinutes(new Date(), 20);
-    
-    console.log(`🕒 [Cron Log] Buscando agendamentos anteriores a: ${timeLimit.toISOString()}`);
-
-    const pendingAppointments = await prisma.appointment.findMany({
-      where: {
-        status: "PENDING",
-        createdAt: { lt: timeLimit },
-      },
-      include: {
-        user: true,
-        payment: true,
-        doctor: true, 
-      },
+    // 1. Lista os 5 últimos agendamentos PENDENTES (independente da data)
+    const allPending = await prisma.appointment.findMany({
+      where: { status: "PENDING" },
+      take: 5,
+      orderBy: { createdAt: 'desc' },
+      select: { 
+        id: true, 
+        patientName: true, 
+        createdAt: true, 
+        paymentReminderSent: true 
+      }
     });
 
-    console.log(`🔎 [Cron Log] Encontrados ${pendingAppointments.length} agendamentos pendentes antigos.`);
+    console.log("=== 🕵️ DEBUG DO BANCO DE DADOS ===");
+    console.log(`Total de Pendentes encontrados: ${allPending.length}`);
+    
+    const now = new Date();
+    console.log(`Hora atual do Servidor (UTC): ${now.toISOString()}`);
 
-    let cancelledCount = 0;
-    let remindersSent = 0;
-
-    for (const appointment of pendingAppointments) {
-      console.log(`👉 [Cron Log] Processando ID: ${appointment.id} | Status Atual: ${appointment.status}`);
-
-      if (appointment.paymentReminderSent) {
-        console.log("   ↳ Já recebeu lembrete. Cancelando...");
-        await prisma.appointment.update({
-          where: { id: appointment.id },
-          data: { status: "CANCELLED" },
-        });
-        cancelledCount++;
-        continue;
-      }
-
-      const hasOtherValidAppointment = await prisma.appointment.findFirst({
-        where: {
-          userId: appointment.userId,
-          id: { not: appointment.id },
-          status: "CONFIRMED",
-        },
-      });
-
-      if (hasOtherValidAppointment) {
-        console.log("   ↳ Tem outro agendamento CONFIRMED. Cancelando silenciosamente...");
-        await prisma.appointment.update({
-          where: { id: appointment.id },
-          data: { status: "CANCELLED" },
-        });
-        cancelledCount++;
-      } else {
-        console.log("   ↳ Tentando enviar lembrete...");
+    allPending.forEach(app => {
+        const diffInMinutes = (now.getTime() - new Date(app.createdAt).getTime()) / 1000 / 60;
+        console.log(`----------------------------------------------`);
+        console.log(`🆔 ID: ${app.id}`);
+        console.log(`👤 Paciente: ${app.patientName}`);
+        console.log(`📅 Criado em: ${app.createdAt.toISOString()}`);
+        console.log(`⏱️ Idade: ${diffInMinutes.toFixed(2)} minutos`);
+        console.log(`📩 Já enviou lembrete? ${app.paymentReminderSent}`);
         
-        if (appointment.patientPhone && appointment.payment?.preferenceId) {
-            const checkoutLink = `${process.env.NEXT_PUBLIC_APP_URL || "https://healthfirst.com.br"}/dashboard/assinatura/processando?preferenceId=${appointment.payment.preferenceId}`;
-            const doctorName = appointment.doctor?.name || "Clínica HealthFirst";
-
-            console.log(`   ↳ Dados: Paciente=${appointment.patientName}, Médico=${doctorName}, Link=${checkoutLink}`);
-
-            await sendPendingPixMessage(
-                appointment.patientPhone,
-                appointment.patientName,
-                doctorName,
-                checkoutLink
-            );
+        if (diffInMinutes > 20) {
+            console.log("✅ ESTE DEVERIA SER PEGO PELO CRON!");
         } else {
-            console.warn("   ⚠️ [Cron Log] Faltando telefone ou preferenceId. Pular envio.");
+            console.log("❌ Este é muito novo para o Cron.");
         }
+    });
 
-        await prisma.appointment.update({
-          where: { id: appointment.id },
-          data: { paymentReminderSent: true },
-        });
-        
-        remindersSent++;
-      }
-    }
-
-    console.log(`✅ [Cron Log] Finalizado. Cancelados: ${cancelledCount}, Lembretes: ${remindersSent}`);
-
-    return NextResponse.json({
-      success: true,
-      cancelled: cancelledCount,
-      remindersSent: remindersSent,
-      message: `Cron finalizado. ${cancelledCount} cancelados, ${remindersSent} lembretes enviados.`,
+    return NextResponse.json({ 
+      debug: true, 
+      serverTime: now.toISOString(),
+      items: allPending 
     });
 
   } catch (error: any) {
-    console.error("❌ [Cron Log] Erro fatal:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
