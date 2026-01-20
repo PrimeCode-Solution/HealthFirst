@@ -1,3 +1,4 @@
+// src/components/appointment-card.tsx
 import { useState } from "react"; 
 import {
   CalendarIcon,
@@ -73,7 +74,10 @@ export default function AppointmentCard({
   onComplete,
 }: AppointmentCardProps) {
     const router = useRouter(); 
+    // Estado para o diálogo de Cancelamento
     const [isCancelDialogOpen, setCancelDialogOpen] = useState(false);
+    // NOVO: Estado para o diálogo de Conclusão
+    const [isCompleteDialogOpen, setCompleteDialogOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
 
   const isDoctor = currentUser?.role === "DOCTOR";
@@ -147,9 +151,9 @@ export default function AppointmentCard({
 
   const startTime = appointment.startTime?.slice(0, 5) || "--:--";
   
+  // ... (lógica de nomes mantida igual)
   let mainName = "";
   let subName = null;
-
   if (isStaff) {
     mainName = appointment.patientName || appointment.user?.name || "Paciente sem nome";
     if (isAdmin) {
@@ -172,7 +176,6 @@ export default function AppointmentCard({
   }
 
   const canViewContact = isAdmin || (isDoctor && appointment.doctorId === currentUser?.id);
-  
   const contactEmail = appointment.patientEmail || appointment.user?.email;
   const contactPhone = appointment.patientPhone || appointment.user?.phone;
   const createdAtFormatted = appointment.createdAt 
@@ -194,6 +197,7 @@ export default function AppointmentCard({
           <div className="flex flex-col md:flex-row md:items-center justify-between p-4 gap-4">
               
               <div className="flex items-start gap-4 flex-1">
+                  {/* ... (parte visual do horário e nome mantida) */}
                   <div className="flex h-14 w-14 shrink-0 flex-col items-center justify-center rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-700 font-semibold shadow-sm">
                       <span className="text-lg leading-none">{startTime}</span>
                       <span className="text-[10px] text-emerald-600/70 uppercase mt-0.5">Início</span>
@@ -214,12 +218,14 @@ export default function AppointmentCard({
                                   isDoctor={isDoctor} 
                                   isPatient={isPatient}
                                   onEdit={onEdit} 
-                                  onRequestCancel={() => setCancelDialogOpen(true)} // MUDANÇA AQUI
-                                  onComplete={onComplete} 
+                                  onRequestCancel={() => setCancelDialogOpen(true)}
+                                  // Passamos a função que abre o dialog local
+                                  onRequestComplete={() => setCompleteDialogOpen(true)} 
                               />
                           </div>
                       </div>
 
+                      {/* ... (detalhes do card mantidos) */}
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 mt-2 text-sm text-muted-foreground">
                           <div className="flex items-center gap-1.5 text-xs font-medium bg-gray-50 px-2 py-0.5 rounded-md border border-gray-100">
                               <Stethoscope className="h-3 w-3 text-emerald-600" />
@@ -230,15 +236,13 @@ export default function AppointmentCard({
                                   {!['GENERAL', 'URGENT', 'FOLLOWUP'].includes(appointment.type) && (appointment.type || 'Consulta')}
                               </span>
                           </div>
-                          
                           {isStaff && (
                               <div className="flex items-center gap-1.5 text-xs">
                                   <Banknote className="h-3 w-3" />
                                   <span>R$ {Number(appointment.amount).toFixed(2)}</span>
                               </div>
                           )}
-
-                          {canViewContact && (
+                           {canViewContact && (
                               <Popover>
                                   <PopoverTrigger asChild>
                                       <button className="text-muted-foreground hover:text-emerald-600 transition-colors focus:outline-none flex items-center gap-1 text-xs cursor-pointer">
@@ -246,12 +250,7 @@ export default function AppointmentCard({
                                       </button>
                                   </PopoverTrigger>
                                   <PopoverContent className="w-72 p-0" align="start">
-                                      <ContactInfo 
-                                          name={appointment.patientName} 
-                                          email={contactEmail} 
-                                          phone={contactPhone} 
-                                          getWhatsappLink={getWhatsappLink} 
-                                      />
+                                      <ContactInfo name={appointment.patientName} email={contactEmail} phone={contactPhone} getWhatsappLink={getWhatsappLink} />
                                   </PopoverContent>
                               </Popover>
                           )}
@@ -266,7 +265,8 @@ export default function AppointmentCard({
                           <Button 
                               size="sm" 
                               variant="outline"
-                              onClick={() => onComplete(appointment)}
+                              // ALTERADO: Agora abre o dialog local
+                              onClick={() => setCompleteDialogOpen(true)}
                               className="text-emerald-700 border-emerald-200 hover:bg-emerald-50 w-full md:w-auto h-9"
                           >
                               <CheckCircle2 className="mr-2 h-4 w-4" />
@@ -298,16 +298,17 @@ export default function AppointmentCard({
                               isDoctor={isDoctor}
                               isPatient={isPatient}
                               onEdit={onEdit} 
-                              onRequestCancel={() => setCancelDialogOpen(true)} // MUDANÇA AQUI
-                              onComplete={onComplete} 
+                              onRequestCancel={() => setCancelDialogOpen(true)}
+                              // Passamos a função que abre o dialog local
+                              onRequestComplete={() => setCompleteDialogOpen(true)} 
                           />
                       </div>
                   </div>
               </div>
           </div>
-
+          {/* ... (footer do card mantido) */}
           {isAdmin && (
-              <div className="bg-slate-50 border-t border-slate-100 px-4 py-2 text-[10px] text-slate-500 flex flex-wrap gap-x-4 gap-y-1 items-center">
+               <div className="bg-slate-50 border-t border-slate-100 px-4 py-2 text-[10px] text-slate-500 flex flex-wrap gap-x-4 gap-y-1 items-center">
                   <div className="flex items-center gap-1">
                       <Clock className="h-3 w-3 text-slate-400" />
                       <span>{createdAtFormatted}</span>
@@ -321,6 +322,7 @@ export default function AppointmentCard({
         </div>
       </Card>
 
+      {/* Dialog de Cancelamento (Já existia) */}
       <AlertDialog open={isCancelDialogOpen} onOpenChange={setCancelDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -344,11 +346,37 @@ export default function AppointmentCard({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* NOVO: Dialog de Conclusão */}
+      <AlertDialog open={isCompleteDialogOpen} onOpenChange={setCompleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-emerald-900">
+              Finalizar Atendimento
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Marcar esta consulta como concluída? Isso atualizará o histórico do paciente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                  onComplete(appointment); 
+                  setCompleteDialogOpen(false);
+              }}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+            >
+              Concluir Consulta
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
 
-function ActionMenu({ appointment, isDoctor, isPatient, onEdit, onRequestCancel, onComplete }: any) {
+function ActionMenu({ appointment, isDoctor, isPatient, onEdit, onRequestCancel, onRequestComplete }: any) {
     const isCompletedOrCancelled = ['COMPLETED', 'CANCELLED', 'CANCELLATION_REQUESTED'].includes(appointment.status);
 
     return (
@@ -369,7 +397,8 @@ function ActionMenu({ appointment, isDoctor, isPatient, onEdit, onRequestCancel,
                 )}
                 
                 {isDoctor && appointment.status === 'CONFIRMED' && (
-                    <DropdownMenuItem onClick={() => onComplete(appointment)} className="text-emerald-600">
+                    // Alterado para chamar onRequestComplete
+                    <DropdownMenuItem onClick={onRequestComplete} className="text-emerald-600">
                         <CheckCircle2 className="mr-2 h-4 w-4" />
                         Finalizar Consulta
                     </DropdownMenuItem>
@@ -399,6 +428,7 @@ function ActionMenu({ appointment, isDoctor, isPatient, onEdit, onRequestCancel,
 }
 
 function ContactInfo({ name, email, phone, getWhatsappLink }: any) {
+    // ... (mantido igual)
     return (
         <div className="flex flex-col">
             <div className="p-3 bg-emerald-50/50 border-b border-emerald-100 flex items-center gap-2">
