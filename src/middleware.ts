@@ -1,40 +1,91 @@
-import { withAuth } from "next-auth/middleware";
+import { withAuth, NextRequestWithAuth } from "next-auth/middleware";
 import { NextResponse } from "next/server";
+import {
+  authRateLimit,
+  appointmentsApiRateLimit,
+  othersApiRateLimit,
+} from "@/lib/rate-limit";
+import type { NextRequest, NextFetchEvent } from "next/server";
 
-export default withAuth(
-  function middleware(req) {
-    const token = req.nextauth.token;
-    const path = req.nextUrl.pathname;
-    const userRole = token?.role;
+async function handleRateLimit(req: NextRequest) {
+  const { pathname } = req.nextUrl;
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0] ?? "127.0.0.1";
 
-    const adminRoutes = ["/dashboard/medicos", "/dashboard/clientes"];
-    const staffRoutes = ["/dashboard/agendamentos"]; 
-    const apiStaffRoutes = ["/api/appointments"]; 
-    
-    if (adminRoutes.some((route) => path.startsWith(route))) {
-      if (userRole !== "ADMIN") {
-        return NextResponse.rewrite(new URL("/forbidden", req.url));
-      }
-    }
-
-    if (staffRoutes.some((route) => path.startsWith(route))) {
-      if (userRole !== "ADMIN" && userRole !== "DOCTOR") {
-        return NextResponse.rewrite(new URL("/forbidden", req.url));
-      }
-    }
-
-    return NextResponse.next();
-  },
-  {
-    callbacks: {
-      authorized: ({ token }) => !!token,
-    },
-    pages: {
-      signIn: "/login",
-    },
+  let limiter;
+  if (pathname.startsWith("/api/auth")) {
+    limiter = authRateLimit;
+  } else if (pathname.startsWith("/api/appointments")) {
+    limiter = appointmentsApiRateLimit;
+  } else if (pathname.startsWith("/api/")) {
+    limiter = othersApiRateLimit;
   }
-);
+
+  if (limiter) {
+    try {
+      const { success } = await limiter.limit(ip);
+      if (!success) {
+        return NextResponse.json(
+          { error: "Muitas requisições. Tente novamente em breve." },
+          { status: 429 },
+        );
+      }
+    } catch (error) {
+      console.error(`Redis Error on ${pathname}:`, error);
+    }
+  }
+
+  return null;
+}
+
+export default async function middleware(
+  req: NextRequest,
+  event: NextFetchEvent,
+) {
+  const rateLimitResponse = await handleRateLimit(req);
+  if (rateLimitResponse) return rateLimitResponse;
+
+  const authMiddleware = withAuth(
+    function middleware(req: NextRequestWithAuth) {
+      const { pathname } = req.nextUrl;
+      const token = req.nextauth?.token;
+      const userRole = token?.role;
+
+      const adminRoutes = ["/dashboard/medicos", "/dashboard/clientes"];
+      const staffRoutes = ["/dashboard/agendamentos"];
+
+      if (
+        adminRoutes.some((route) => pathname.startsWith(route)) &&
+        userRole !== "ADMIN"
+      ) {
+        return NextResponse.rewrite(new URL("/forbidden", req.url));
+      }
+
+      if (
+        staffRoutes.some((route) => pathname.startsWith(route)) &&
+        userRole !== "ADMIN" &&
+        userRole !== "DOCTOR"
+      ) {
+        return NextResponse.rewrite(new URL("/forbidden", req.url));
+      }
+
+      return NextResponse.next();
+    },
+    {
+      callbacks: {
+        authorized: ({ req, token }) => {
+          if (req.nextUrl.pathname.startsWith("/api/auth")) return true;
+          return !!token;
+        },
+      },
+      pages: {
+        signIn: "/login",
+      },
+    },
+  );
+
+  return authMiddleware(req as NextRequestWithAuth, event);
+}
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/api/appointments/:path*"],
+  matcher: ["/dashboard/:path*", "/api/:path*"],
 };

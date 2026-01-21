@@ -3,6 +3,8 @@ import { prisma } from "@/app/providers/prisma";
 import { updateEbookSchema, idParamSchema } from "@/lib/validations/ebook";
 import { ApiResponse, Ebook } from "@/types/ebook";
 import { z } from "zod";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth-config";
 
 // GET /api/ebooks/[id] - Detalhes completos do ebook
 export async function GET(
@@ -93,6 +95,15 @@ export async function PUT(
   props: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session || !session.user) {
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+
+    if (session.user.role !== 'ADMIN') {
+      return NextResponse.json({ success: false, error: "Forbidden" }, { status: 403 });
+    }
+
     const params = await props.params;
     const { id } = idParamSchema.parse(params);
 
@@ -100,7 +111,6 @@ export async function PUT(
     const existingEbook = await prisma.ebook.findUnique({
       where: { id }
     });
-
     if (!existingEbook) {
       const response: ApiResponse = {
         success: false,
@@ -195,6 +205,15 @@ export async function DELETE(
   props: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session || !session.user) {
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+
+    if (session.user.role !== 'ADMIN') {
+      return NextResponse.json({ success: false, error: "Forbidden" }, { status: 403 });
+    }
+
     const params = await props.params;
     const { id } = idParamSchema.parse(params);
 
@@ -202,7 +221,6 @@ export async function DELETE(
     const existingEbook = await prisma.ebook.findUnique({
       where: { id }
     });
-
     if (!existingEbook) {
       const response: ApiResponse = {
         success: false,
