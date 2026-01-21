@@ -1,6 +1,9 @@
 import { paymentClient, preApprovalClient } from "@/lib/mercadopago";
 import { prisma } from "@/app/providers/prisma";
 import crypto from "crypto";
+import { sendAppointmentConfirmation } from "@/lib/whatsapp";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 function validateSignature(body: string, signature: string | null, requestId: string | null): boolean {
     const secret = process.env.MERCADO_PAGO_WEBHOOK_SECRET || process.env.MP_WEBHOOK_SECRET;
@@ -43,6 +46,8 @@ export async function POST(req: Request) {
         const resourceId = data?.id;
 
         if (!resourceId) return new Response("No Resource ID", { status: 200 });
+
+        let appointmentToConfirm = null;
 
         await prisma.$transaction(async (tx) => {
             
@@ -92,10 +97,12 @@ export async function POST(req: Request) {
 
                     if (dbPayment.appointmentId) {
                         if (status === "CONFIRMED") {
-                            await tx.appointment.update({
+                            const updatedAppt = await tx.appointment.update({
                                 where: { id: dbPayment.appointmentId },
-                                data: { status: "CONFIRMED" }
+                                data: { status: "CONFIRMED" },
+                                include: { user: true }
                             });
+                            appointmentToConfirm = updatedAppt; 
                         } else if (status === "CANCELLED" || status === "REJECTED") {
                              await tx.appointment.update({
                                 where: { id: dbPayment.appointmentId },
@@ -105,7 +112,6 @@ export async function POST(req: Request) {
                     }
                 } 
                 else {
-                    
                     const appointment = externalRef ? await tx.appointment.findUnique({ where: { id: externalRef } }) : null;
 
                     if (appointment) {
@@ -123,10 +129,12 @@ export async function POST(req: Request) {
                         });
 
                         if (status === "CONFIRMED") {
-                            await tx.appointment.update({
+                            const updatedAppt = await tx.appointment.update({
                                 where: { id: appointment.id },
-                                data: { status: "CONFIRMED" }
+                                data: { status: "CONFIRMED" },
+                                include: { user: true }
                             });
+                            appointmentToConfirm = updatedAppt;
                         }
                     } else {
                         const subscriptionId = payment.metadata?.subscription_id || payment.external_reference;
@@ -161,6 +169,31 @@ export async function POST(req: Request) {
                 }
             }
         });
+
+        if (appointmentToConfirm) {
+            try {
+                const appt = appointmentToConfirm as any;
+                
+                const phone = appt.patientPhone || appt.user?.phone;
+                const patientName = appt.patientName || appt.user?.name || "Paciente";
+
+                if (phone) {
+                    const dateFormatted = format(new Date(appt.date), "dd/MM 'às'", { locale: ptBR });
+                    const timeFormatted = appt.startTime; 
+                    const dateAndHour = `${dateFormatted} ${timeFormatted}`;
+
+                    console.log(`🚀 [Webhook MP] Enviando confirmação WhatsApp para ${phone}`);
+                    
+                    sendAppointmentConfirmation(phone, patientName, dateAndHour)
+                        .then(() => console.log("✅ [Webhook MP] WhatsApp enviado com sucesso."))
+                        .catch((err) => console.error("❌ [Webhook MP] Falha ao enviar WhatsApp:", err));
+                } else {
+                    console.warn("⚠️ [Webhook MP] Telefone não encontrado para envio de confirmação.");
+                }
+            } catch (error) {
+                console.error("❌ [Webhook MP] Erro ao processar envio de WhatsApp:", error);
+            }
+        }
 
         return new Response("OK", { status: 200 });
 

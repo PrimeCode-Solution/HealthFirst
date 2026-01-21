@@ -50,8 +50,7 @@ export async function sendWhatsAppMessage({
   };
 
   console.log(`🚀 [WhatsApp Log] Enviando para ${cleanPhone} | Template: ${templateName}`);
-  console.log("📦 [WhatsApp Log] Payload Completo:", JSON.stringify(payload, null, 2));
-
+  
   try {
     const response = await fetch(url, {
       method: "POST",
@@ -64,14 +63,12 @@ export async function sendWhatsAppMessage({
 
     const data = await response.json();
 
-    console.log(`📡 [WhatsApp Log] Status HTTP: ${response.status}`);
-    console.log("📩 [WhatsApp Log] Resposta da Meta:", JSON.stringify(data, null, 2));
-
     if (!response.ok) {
       console.error("❌ [WhatsApp Log] ERRO NA API:", JSON.stringify(data, null, 2));
       return null;
     }
 
+    console.log("✅ [WhatsApp Log] Sucesso (ID):", data.messages?.[0]?.id);
     return data;
   } catch (error) {
     console.error("❌ [WhatsApp Log] Falha crítica no fetch:", error);
@@ -87,14 +84,13 @@ export async function sendAppointmentConfirmation(
   return sendWhatsAppMessage({
     to: phone,
     templateName: "confirmacao_agendamento",
-      languageCode: "pt_BR",
+    languageCode: "pt_BR",
     components: [
       {
         type: "body",
         parameters: [
-          { type: "text", text: patientName },
-          { type: "text", text: dateAndHour },
-        ],
+          { type: "text", text: patientName }, 
+          { type: "text", text: dateAndHour }, 
       },
     ],
   });
@@ -113,9 +109,9 @@ export async function sendAppointmentReminder(
       {
         type: "body",
         parameters: [
-          { type: "text", text: patientName },
-          { type: "text", text: dateAndHour },
-          { type: "text", text: doctorName }
+          { type: "text", text: patientName }, 
+          { type: "text", text: dateAndHour }, 
+          { type: "text", text: doctorName }   
         ]
       }
     ]
