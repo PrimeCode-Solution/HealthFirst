@@ -50,7 +50,7 @@ export async function sendWhatsAppMessage({
   };
 
   console.log(`🚀 [WhatsApp Log] Enviando para ${cleanPhone} | Template: ${templateName}`);
-  
+
   try {
     const response = await fetch(url, {
       method: "POST",
@@ -68,7 +68,6 @@ export async function sendWhatsAppMessage({
       return null;
     }
 
-    console.log("✅ [WhatsApp Log] Sucesso (ID):", data.messages?.[0]?.id);
     return data;
   } catch (error) {
     console.error("❌ [WhatsApp Log] Falha crítica no fetch:", error);
@@ -89,8 +88,9 @@ export async function sendAppointmentConfirmation(
       {
         type: "body",
         parameters: [
-          { type: "text", text: patientName }, 
-          { type: "text", text: dateAndHour }, 
+          { type: "text", text: patientName },
+          { type: "text", text: dateAndHour },
+        ],
       },
     ],
   });
@@ -109,9 +109,9 @@ export async function sendAppointmentReminder(
       {
         type: "body",
         parameters: [
-          { type: "text", text: patientName }, 
-          { type: "text", text: dateAndHour }, 
-          { type: "text", text: doctorName }   
+          { type: "text", text: patientName },
+          { type: "text", text: dateAndHour },
+          { type: "text", text: doctorName }
         ]
       }
     ]
