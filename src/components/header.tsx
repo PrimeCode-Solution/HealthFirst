@@ -115,7 +115,7 @@ export function Header() {
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                    <Link href="/dashboard/config" className="cursor-pointer">
+                    <Link href="/dashboard/perfil" className="cursor-pointer">
                       <User className="mr-2 h-4 w-4" />
                       <span>Minha Conta</span>
                     </Link>
