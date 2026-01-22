@@ -14,6 +14,8 @@ export async function POST(req: Request) {
         const body = await req.json();
         const { formData, appointmentId } = body;
 
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.BASE_URL || "http://localhost:3000";
+
         const existingPayment = await prisma.payment.findFirst({
              where: { appointmentId },
              include: { 
