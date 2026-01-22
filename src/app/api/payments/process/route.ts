@@ -81,6 +81,7 @@ export async function POST(req: Request) {
                 data: { status: "CONFIRMED" }
             });
 
+            // 👇 CORREÇÃO: Adicionado AWAIT para segurar o processo na Vercel
             try {
                 const appt = existingPayment.appointment;
                 
@@ -93,17 +94,18 @@ export async function POST(req: Request) {
                         const timeFormatted = appt.startTime; 
                         const dateAndHour = `${dateFormatted} ${timeFormatted}`;
     
-                        console.log(`🚀 [Process Payment] Pagamento Aprovado Imediato. Enviando WhatsApp para ${phone}`);
+                        console.log(`🚀 [Process Payment] Pagamento Aprovado. Aguardando envio WhatsApp para ${phone}...`);
                         
-                        sendAppointmentConfirmation(phone, patientName, dateAndHour)
-                            .then(() => console.log("✅ [Process Payment] WhatsApp enviado com sucesso."))
-                            .catch((err) => console.error("❌ [Process Payment] Falha ao enviar WhatsApp:", err));
+                        await sendAppointmentConfirmation(phone, patientName, dateAndHour);
+                        
+                        console.log("✅ [Process Payment] WhatsApp enviado e confirmado.");
                     } else {
-                        console.warn("⚠️ [Process Payment] Telefone não encontrado para envio de confirmação.");
+                        console.warn("⚠️ [Process Payment] Telefone não encontrado.");
                     }
                 }
             } catch (error) {
-                console.error("❌ [Process Payment] Erro ao processar envio de WhatsApp:", error);
+                // Loga o erro mas não trava o pagamento
+                console.error("❌ [Process Payment] Erro no envio do WhatsApp (mas pagamento ok):", error);
             }
         }
 
