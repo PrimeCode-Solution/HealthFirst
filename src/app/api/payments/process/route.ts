@@ -1,5 +1,8 @@
 import { MercadoPagoConfig, Payment } from "mercadopago";
 import { prisma } from "@/app/providers/prisma";
+import { sendAppointmentConfirmation } from "@/lib/whatsapp";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 const mpAccessToken = process.env.MERCADO_PAGO_ACCESS_TOKEN || process.env.MP_ACCESS_TOKEN;
 
@@ -77,6 +80,31 @@ export async function POST(req: Request) {
                 where: { id: appointmentId },
                 data: { status: "CONFIRMED" }
             });
+
+            try {
+                const appt = existingPayment.appointment;
+                
+                if (appt) {
+                    const phone = appt.patientPhone || appt.user?.phone;
+                    const patientName = appt.patientName || appt.user?.name || "Paciente";
+    
+                    if (phone) {
+                        const dateFormatted = format(new Date(appt.date), "dd/MM 'às'", { locale: ptBR });
+                        const timeFormatted = appt.startTime; 
+                        const dateAndHour = `${dateFormatted} ${timeFormatted}`;
+    
+                        console.log(`🚀 [Process Payment] Pagamento Aprovado Imediato. Enviando WhatsApp para ${phone}`);
+                        
+                        sendAppointmentConfirmation(phone, patientName, dateAndHour)
+                            .then(() => console.log("✅ [Process Payment] WhatsApp enviado com sucesso."))
+                            .catch((err) => console.error("❌ [Process Payment] Falha ao enviar WhatsApp:", err));
+                    } else {
+                        console.warn("⚠️ [Process Payment] Telefone não encontrado para envio de confirmação.");
+                    }
+                }
+            } catch (error) {
+                console.error("❌ [Process Payment] Erro ao processar envio de WhatsApp:", error);
+            }
         }
 
         return new Response(JSON.stringify({
