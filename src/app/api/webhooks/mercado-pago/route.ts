@@ -86,6 +86,8 @@ export async function POST(req: Request) {
                 });
 
                 if (dbPayment) {
+                    const wasAlreadyConfirmed = dbPayment.status === "CONFIRMED";
+
                     await tx.payment.update({
                         where: { id: dbPayment.id },
                         data: { 
@@ -102,7 +104,10 @@ export async function POST(req: Request) {
                                 data: { status: "CONFIRMED" },
                                 include: { user: true }
                             });
-                            appointmentToConfirm = updatedAppt; 
+                            
+                            if (!wasAlreadyConfirmed) {
+                                appointmentToConfirm = updatedAppt; 
+                            }
                         } else if (status === "CANCELLED" || status === "REJECTED") {
                              await tx.appointment.update({
                                 where: { id: dbPayment.appointmentId },
