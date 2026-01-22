@@ -27,10 +27,13 @@ export async function POST(req: Request) {
              return new Response(JSON.stringify({ error: "Pagamento não encontrado" }), { status: 404 });
         }
 
-        const payerEmail = formData.payer.email || 
+        const payerEmail = formData.payer?.email || 
                            existingPayment.appointment?.patientEmail || 
                            existingPayment.appointment?.user?.email || 
                            "email_nao_informado@healthfirst.com";
+
+        const identificationType = formData.payer?.identification?.type || "CPF";
+        const identificationNumber = formData.payer?.identification?.number || "";
 
         const paymentData = {
             transaction_amount: Number(existingPayment.amount),
@@ -43,13 +46,14 @@ export async function POST(req: Request) {
             payer: {
                 email: payerEmail,
                 identification: {
-                    type: formData.payer.identification.type,
-                    number: formData.payer.identification.number,
+                    type: identificationType,
+                    number: identificationNumber,
                 },
             },
             metadata: {
                 appointment_id: appointmentId.toString()
-            }
+            },
+            notification_url: `${baseUrl}/api/webhooks/mercado-pago`
         };
 
         const response = await paymentClient.create({ body: paymentData });
@@ -77,6 +81,7 @@ export async function POST(req: Request) {
             id: response.id,
             status: response.status,
             detail: response.status_detail,
+            point_of_interaction: response.point_of_interaction 
         }), { 
             status: 200, 
             headers: { "Content-Type": "application/json" } 
