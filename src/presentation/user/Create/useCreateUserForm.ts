@@ -4,6 +4,7 @@ import { createUserSchema } from "@/lib/validations/user";
 import { z } from "zod";
 import { useCreateUserMutation } from "../mutations/useUserMutations";
 import { UserRole } from "@/modules/user/domain/user.interface";
+import DOMPurify from "dompurify";
 
 export type CreateUserFormData = z.infer<typeof createUserSchema>;
 
@@ -22,7 +23,13 @@ export const useCreateUserForm = () => {
   const createMutation = useCreateUserMutation();
 
   const handleSubmit = form.handleSubmit(async (data: CreateUserFormData) => {
-    await createMutation.mutateAsync(data, {
+    const sanitizedData = {
+      ...data,
+      name: typeof window !== 'undefined' ? DOMPurify.sanitize(data.name) : data.name,
+      email: data.email.trim().toLowerCase(),
+      };
+
+    await createMutation.mutateAsync(sanitizedData, {
       onSuccess: () => {
         form.reset();
       },

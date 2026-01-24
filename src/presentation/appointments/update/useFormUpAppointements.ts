@@ -11,7 +11,7 @@ export const AppointmentStatusSchema = z.enum([
 ]);
 
 const UpdateAppointmentSchema = z.object({
-  id: z.string(),
+  id: z.string().trim(),
   status: AppointmentStatusSchema,
 });
 
