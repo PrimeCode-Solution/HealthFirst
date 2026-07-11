@@ -34,7 +34,23 @@ export async function POST(request: Request) {
       },
     });
 
-    await sendPasswordResetEmail(user.email, resetToken);
+    try {
+      await sendPasswordResetEmail(user.email, resetToken);
+    } catch (emailError) {
+      console.error("Forgot Password Email Error:", emailError);
+      await prisma.user.update({
+        where: { email },
+        data: {
+          resetPasswordToken: null,
+          resetPasswordExpires: null,
+        },
+      });
+
+      return NextResponse.json(
+        { error: "Servico de e-mail indisponivel no momento." },
+        { status: 503 }
+      );
+    }
 
     return NextResponse.json(
       { message: "E-mail enviado com sucesso." },
@@ -44,6 +60,7 @@ export async function POST(request: Request) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: error.issues }, { status: 400 });
     }
+    console.error("Forgot Password Error:", error);
     return NextResponse.json(
       { error: "Erro ao processar solicitação." },
       { status: 500 }

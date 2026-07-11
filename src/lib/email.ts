@@ -6,27 +6,42 @@ interface SendEmailParams {
   html: string;
 }
 
+const smtpPort = Number(process.env.SMTP_PORT || "587");
+const smtpHost = process.env.SMTP_HOST;
+const smtpUser = process.env.SMTP_USER;
+const rawSmtpPass = process.env.SMTP_PASS;
+const smtpPass = smtpHost?.includes("gmail")
+  ? rawSmtpPass?.replace(/\s+/g, "")
+  : rawSmtpPass?.trim();
+const smtpFrom = process.env.SMTP_FROM || smtpUser;
+const effectiveFrom = smtpHost?.includes("gmail") && smtpUser ? smtpUser : smtpFrom;
+
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: Number(process.env.SMTP_PORT),
-  secure: false, 
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
+  host: smtpHost,
+  port: smtpPort,
+  secure: smtpPort === 465,
+  auth: smtpUser && smtpPass ? {
+    user: smtpUser,
+    pass: smtpPass,
+  } : undefined,
 });
 
 export async function sendEmail({ to, subject, html }: SendEmailParams) {
+  if (!smtpHost || !smtpPort || !effectiveFrom) {
+    throw new Error("Configuração SMTP incompleta.");
+  }
+
   try {
     const info = await transporter.sendMail({
-      from: process.env.SMTP_FROM,
+      from: effectiveFrom,
       to,
       subject,
       html,
     });
     return info;
-  } catch (error) {
-    throw new Error("Falha ao enviar e-mail");
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "erro desconhecido";
+    throw new Error(`Falha ao enviar e-mail: ${message}`);
   }
 }
 

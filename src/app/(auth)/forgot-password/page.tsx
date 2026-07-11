@@ -31,10 +31,11 @@ export default function ForgotPasswordPage() {
         throw new Error(data.error || "Erro ao processar solicitação");
       }
 
-      toast.success("Código enviado! Verifique seu e-mail.");
+      toast.success(data.message || "Código enviado! Verifique seu e-mail.");
       router.push("/reset-password");
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Erro ao processar solicitação";
+      toast.error(message);
     } finally {
       setIsLoading(false);
     }

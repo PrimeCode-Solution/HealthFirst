@@ -141,22 +141,74 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     
-    const { 
-      date, startTime, endTime, consultationTypeId, description, 
-      patientEmail, patientPhone, doctorId, 
-      userId, name 
+    const {
+      date,
+      startTime,
+      endTime,
+      consultationTypeId,
+      type,
+      amount: payloadAmount,
+      description,
+      patientEmail,
+      patientPhone,
+      doctorId,
+      userId,
+      name,
     } = body;
     
     let { patientName } = body; 
     if (!patientName && name) patientName = name;
 
-    if (!date || !consultationTypeId) {
+    if (!date) {
       return NextResponse.json({ error: "Dados obrigatórios faltando." }, { status: 400 });
     }
 
-    const consultationType = await prisma.consultationType.findUnique({
-      where: { id: consultationTypeId }
-    });
+    let consultationType = null;
+
+    if (consultationTypeId) {
+      consultationType = await prisma.consultationType.findUnique({
+        where: { id: consultationTypeId },
+      });
+    }
+
+    // Compatibilidade com payload legado que envia `type` ao inves de `consultationTypeId`.
+    if (!consultationType && typeof type === "string") {
+      const typeNameHints: Record<string, string[]> = {
+        GENERAL: ["geral"],
+        URGENT: ["urg", "especial"],
+        FOLLOWUP: ["retorno", "follow"],
+      };
+
+      const hints = typeNameHints[type] ?? [];
+      if (hints.length > 0) {
+        consultationType = await prisma.consultationType.findFirst({
+          where: {
+            isActive: true,
+            OR: hints.map((hint) => ({
+              name: { contains: hint, mode: "insensitive" },
+            })),
+          },
+          orderBy: { price: "asc" },
+        });
+      }
+    }
+
+    // Fallback adicional: tenta casar pelo valor enviado no payload.
+    if (!consultationType && payloadAmount != null && Number(payloadAmount) > 0) {
+      consultationType = await prisma.consultationType.findFirst({
+        where: {
+          isActive: true,
+          price: Number(payloadAmount),
+        },
+      });
+    }
+
+    if (!consultationType) {
+      consultationType = await prisma.consultationType.findFirst({
+        where: { isActive: true },
+        orderBy: { price: "asc" },
+      });
+    }
 
     if (!consultationType) {
       return NextResponse.json({ error: "Tipo de consulta inválido." }, { status: 400 });
