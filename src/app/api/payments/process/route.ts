@@ -37,29 +37,41 @@ export async function POST(req: Request) {
                            existingPayment.appointment?.user?.email || 
                            "email_nao_informado@healthfirst.com";
 
-        const identificationType = formData.payer?.identification?.type || "CPF";
         const identificationNumber = formData.payer?.identification?.number || "";
+        const identificationType = formData.payer?.identification?.type || "CPF";
 
-        const paymentData = {
+        // PIX e boleto não enviam token/installments/issuer_id: mandá-los como NaN/undefined
+        // faz o Mercado Pago rejeitar a transação.
+        const isCardPayment = Boolean(formData.token);
+
+        const payer: Record<string, any> = {
+            ...(formData.payer || {}),
+            email: payerEmail,
+        };
+
+        if (identificationNumber) {
+            payer.identification = { type: identificationType, number: identificationNumber };
+        } else {
+            delete payer.identification;
+        }
+
+        const paymentData: Record<string, any> = {
             transaction_amount: Number(existingPayment.amount),
-            token: formData.token,
             description: existingPayment.description || "Consulta Médica",
-            installments: Number(formData.installments),
             payment_method_id: formData.payment_method_id,
-            issuer_id: formData.issuer_id,
             external_reference: appointmentId.toString(),
-            payer: {
-                email: payerEmail,
-                identification: {
-                    type: identificationType,
-                    number: identificationNumber,
-                },
-            },
+            payer,
             metadata: {
                 appointment_id: appointmentId.toString()
             },
             notification_url: `${baseUrl}/api/webhooks/mercado-pago`
         };
+
+        if (isCardPayment) {
+            paymentData.token = formData.token;
+            paymentData.installments = Number(formData.installments) || 1;
+            if (formData.issuer_id) paymentData.issuer_id = formData.issuer_id;
+        }
 
         const response = await paymentClient.create({ body: paymentData });
         

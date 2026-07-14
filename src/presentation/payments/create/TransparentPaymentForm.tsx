@@ -1,10 +1,47 @@
 "use client";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { initMercadoPago, Payment } from "@mercadopago/sdk-react";
 import { useRouter } from "next/navigation";
-import { Check, Copy, Loader2, CreditCard, FileText } from "lucide-react"; 
+import { Check, Copy, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
-const MP_PUBLIC_KEY = process.env.NEXT_PUBLIC_MP_PUBLIC_KEY || process.env.NEXT_PUBLIC_MP_ACCESS_TOKEN || "";
+const MP_PUBLIC_KEY = process.env.NEXT_PUBLIC_MP_PUBLIC_KEY || "";
+
+const POLL_INTERVAL_MS = 4000;
+const POLL_TIMEOUT_MS = 300000;
+
+// Definido fora do componente: o <Payment /> do SDK recria o brick sempre que a
+// referência de `customization` muda, então ela precisa ser estável.
+// Obs: "mercadoPago" (Wallet) não entra aqui — ele exige `initialization.preferenceId`,
+// e sem isso o brick falha ao montar.
+const PAYMENT_CUSTOMIZATION = {
+    paymentMethods: {
+        creditCard: "all",
+        debitCard: "all",
+        ticket: "all",
+        bankTransfer: "all", // PIX
+    },
+    visual: {
+        style: {
+            theme: "bootstrap",
+        },
+    },
+} as const;
+
+// O IBrickError do Mercado Pago (e qualquer Error) não tem propriedades enumeráveis,
+// então console.error(err) imprime "{}". Extrai algo legível.
+const describeBrickError = (error: unknown): string => {
+    if (error instanceof Error && error.message) return error.message;
+
+    if (error && typeof error === "object") {
+        const { message, cause } = error as { message?: string; cause?: unknown };
+        if (message) return message;
+        if (typeof cause === "string" && cause) return cause;
+        if (Object.keys(error).length > 0) return JSON.stringify(error);
+    }
+
+    return "Não foi possível carregar o formulário de pagamento. Recarregue a página e tente novamente.";
+};
 
 interface TransparentPaymentFormProps {
     amount: number;
@@ -16,12 +53,14 @@ export default function TransparentPaymentForm({ amount, appointmentId, userEmai
     const router = useRouter();
     const [pixData, setPixData] = useState<{ qrCode: string; ticket: string } | null>(null);
     const [createdPaymentId, setCreatedPaymentId] = useState<string | null>(null);
-    
+
     const [copied, setCopied] = useState(false);
     const [isChecking, setIsChecking] = useState(false);
-    
+
     const startTimeRef = useRef<number | null>(null);
     const intervalRef = useRef<NodeJS.Timeout | null>(null);
+
+    const hasValidAmount = Number.isFinite(amount) && amount > 0;
 
     useEffect(() => {
         if (MP_PUBLIC_KEY) {
@@ -47,9 +86,9 @@ export default function TransparentPaymentForm({ amount, appointmentId, userEmai
 
         intervalRef.current = setInterval(async () => {
             try {
-                if (Date.now() - (startTimeRef.current || 0) > 300000) {
+                if (Date.now() - (startTimeRef.current || 0) > POLL_TIMEOUT_MS) {
                     stopPolling();
-                    router.push("/failure"); 
+                    router.push("/failure");
                     return;
                 }
 
@@ -68,83 +107,65 @@ export default function TransparentPaymentForm({ amount, appointmentId, userEmai
             } catch (error) {
                 console.error("Erro ao verificar status:", error);
             }
-        }, 4000); 
+        }, POLL_INTERVAL_MS);
 
         return () => stopPolling();
     }, [createdPaymentId, router]);
 
-    const initialization = {
-        amount: amount,
-        payer: {
-            email: userEmail || "email_generico@teste.com",
-            entityType: "individual" as "individual", 
-        },
-    };
+    // initialization/onSubmit/onError precisam de referência estável pelo mesmo motivo
+    // de PAYMENT_CUSTOMIZATION: caso contrário o brick é destruído e recriado a cada render.
+    const initialization = useMemo(
+        () => ({
+            amount,
+            ...(userEmail ? { payer: { email: userEmail } } : {}),
+        }),
+        [amount, userEmail],
+    );
 
-    const customization = {
-        paymentMethods: {
-            ticket: "all",
-            bankTransfer: "all",
-            creditCard: "all",
-            debitCard: "all",
-            mercadoPago: "all",
-        },
-        visual: {
-            style: {
-                theme: "bootstrap", 
-            }
-        }
-    } as const;
-
-    const onSubmit = async ({ formData }: any) => {
-        return new Promise<void>((resolve, reject) => {
-            fetch("/api/payments/process", {
+    const onSubmit = useCallback(
+        async ({ formData }: any) => {
+            const response = await fetch("/api/payments/process", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
                 },
-                body: JSON.stringify({
-                    formData,
-                    appointmentId: appointmentId
-                }),
-            })
-            .then((response) => response.json())
-            .then((data) => {
-                const paymentId = data.id || data.mercadoPagoId;
-
-                if (data.status === "approved") {
-                    router.push(`/success?payment_id=${paymentId}`); 
-                    resolve();
-                    return;
-                }
-
-                if (paymentId) {
-                    setCreatedPaymentId(String(paymentId));
-                }
-
-                const pixInfo = data.point_of_interaction?.transaction_data;
-                if (pixInfo?.qr_code && pixInfo?.qr_code_base64) {
-                    setPixData({ 
-                        qrCode: pixInfo.qr_code_base64, 
-                        ticket: pixInfo.qr_code
-                    });
-                }
-                
-                resolve(); 
-            })
-            .catch((error) => {
-                console.error("Erro de conexão:", error);
-                reject();
+                body: JSON.stringify({ formData, appointmentId }),
             });
-        });
-    };
 
-    const onError = async (error: any) => {
-        console.error("Erro no Brick:", error);
-    };
+            const data = await response.json();
 
-    const onReady = async () => {
-    };
+            if (!response.ok) {
+                // Rejeitar faz o brick sair do estado de "carregando" e exibir o erro.
+                throw new Error(data.error || "Não foi possível processar o pagamento.");
+            }
+
+            const paymentId = data.id || data.mercadoPagoId;
+
+            if (data.status === "approved") {
+                router.push(`/success?payment_id=${paymentId}`);
+                return;
+            }
+
+            if (paymentId) {
+                setCreatedPaymentId(String(paymentId));
+            }
+
+            const pixInfo = data.point_of_interaction?.transaction_data;
+            if (pixInfo?.qr_code && pixInfo?.qr_code_base64) {
+                setPixData({
+                    qrCode: pixInfo.qr_code_base64,
+                    ticket: pixInfo.qr_code,
+                });
+            }
+        },
+        [appointmentId, router],
+    );
+
+    const onError = useCallback(async (error: unknown) => {
+        const message = describeBrickError(error);
+        console.error("Erro no Brick:", message, error);
+        toast.error(message);
+    }, []);
 
     const handleCopyPix = () => {
         if (pixData?.ticket) {
@@ -154,8 +175,21 @@ export default function TransparentPaymentForm({ amount, appointmentId, userEmai
         }
     };
 
-    if (!MP_PUBLIC_KEY) return <div>Erro: Configure a chave pública do MP.</div>;
+    if (!MP_PUBLIC_KEY) {
+        return (
+            <div className="rounded-md bg-red-50 p-4 text-sm text-red-700">
+                Pagamento indisponível: a chave pública do Mercado Pago (NEXT_PUBLIC_MP_PUBLIC_KEY) não está configurada.
+            </div>
+        );
+    }
 
+    if (!hasValidAmount) {
+        return (
+            <div className="rounded-md bg-red-50 p-4 text-sm text-red-700">
+                Pagamento indisponível: o valor da consulta é inválido. Volte e selecione o tipo de atendimento novamente.
+            </div>
+        );
+    }
 
     if (createdPaymentId) {
         return (
@@ -168,11 +202,11 @@ export default function TransparentPaymentForm({ amount, appointmentId, userEmai
                                 <p className="font-bold mb-1">Pagamento Gerado!</p>
                                 Aguardando confirmação automática...
                             </div>
-                            
+
                             <div className="border-2 border-gray-100 p-2 rounded-lg bg-white shadow-sm relative">
-                                <img 
-                                    src={`data:image/png;base64,${pixData.qrCode}`} 
-                                    alt="QR Code PIX" 
+                                <img
+                                    src={`data:image/png;base64,${pixData.qrCode}`}
+                                    alt="QR Code PIX"
                                     className={`w-56 h-56 object-contain ${isChecking ? 'opacity-50' : ''}`}
                                 />
                                 {isChecking && (
@@ -187,12 +221,12 @@ export default function TransparentPaymentForm({ amount, appointmentId, userEmai
                                     Código Copia e Cola
                                 </label>
                                 <div className="flex gap-2">
-                                     <input 
-                                        readOnly 
-                                        value={pixData.ticket} 
+                                     <input
+                                        readOnly
+                                        value={pixData.ticket}
                                         className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-xs bg-gray-50 text-gray-600 focus:outline-none"
                                      />
-                                     <button 
+                                     <button
                                         onClick={handleCopyPix}
                                         className={`px-4 py-2 rounded-md text-white text-sm font-medium transition-colors ${copied ? 'bg-green-600' : 'bg-blue-600 hover:bg-blue-700'}`}
                                      >
@@ -218,7 +252,7 @@ export default function TransparentPaymentForm({ amount, appointmentId, userEmai
                 </div>
 
                 <div className="w-full pt-4 mt-4 border-t border-gray-100">
-                    <button 
+                    <button
                         onClick={() => router.push('/dashboard')}
                         className="w-full py-3 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors text-sm font-medium"
                     >
@@ -234,9 +268,8 @@ export default function TransparentPaymentForm({ amount, appointmentId, userEmai
             <h2 className="text-xl font-bold mb-4 text-center">Finalizar Pagamento</h2>
             <Payment
                 initialization={initialization}
-                customization={customization}
+                customization={PAYMENT_CUSTOMIZATION}
                 onSubmit={onSubmit}
-                onReady={onReady}
                 onError={onError}
             />
         </div>
