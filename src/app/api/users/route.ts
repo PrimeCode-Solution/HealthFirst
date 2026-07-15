@@ -9,22 +9,25 @@ export async function GET(req: NextRequest) {
     const url = new URL(req.url);
     const roleFilter = url.searchParams.get("role");
 
+    const session = await getServerSession(authOptions);
+
+    // A listagem pública de médicos (?role=DOCTOR) é o único acesso anônimo permitido.
+    // Qualquer outra consulta exige admin ou médico.
     if (roleFilter !== "DOCTOR") {
-        const session = await getServerSession(authOptions);
         if (!session || (session.user.role !== "ADMIN" && session.user.role !== "DOCTOR")) {
           return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
     }
 
+    // Contato (e-mail/telefone) só é exposto a admin/médico. Público vê apenas nome.
+    const canSeeContact = session?.user.role === "ADMIN" || session?.user.role === "DOCTOR";
+
     const where: any = {};
 
     if (roleFilter) {
       where.role = roleFilter;
-    } else {
-       const session = await getServerSession(authOptions);
-       if (session?.user.role === "DOCTOR") {
-         where.role = "USER";
-       }
+    } else if (session?.user.role === "DOCTOR") {
+      where.role = "USER";
     }
 
     const users = await prisma.user.findMany({
@@ -33,17 +36,23 @@ export async function GET(req: NextRequest) {
         id: true,
         name: true,
         email: true,
-        phone: true,      
-        role: true,       
-        createdAt: true, 
-        _count: {         
-          select: { appointments: true } 
-        } 
+        phone: true,
+        role: true,
+        createdAt: true,
+        _count: {
+          select: { appointments: true }
+        }
       },
       orderBy: { name: 'asc' }
     });
 
-    return NextResponse.json({ success: true, data: { users } });
+    const sanitized = users.map((u) => ({
+      ...u,
+      email: canSeeContact ? u.email : null,
+      phone: canSeeContact ? u.phone : null,
+    }));
+
+    return NextResponse.json({ success: true, data: { users: sanitized } });
   } catch (error) {
     console.error("Erro ao listar usuários:", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
