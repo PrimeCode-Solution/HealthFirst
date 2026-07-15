@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/providers/prisma";
 import { updateCategorySchema, idParamSchema } from "@/lib/validations/ebook";
 import { ApiResponse, EbookCategory } from "@/types/ebook";
+import { requireAdmin } from "@/lib/auth-guards";
 import { z } from "zod";
 
 // PUT /api/ebook-categories/[id] - Editar categoria (apenas admin)
@@ -10,6 +11,13 @@ export async function PUT(
   props: { params: Promise<{ id: string }> }
 ) {
   try {
+    if (!(await requireAdmin())) {
+      return NextResponse.json(
+        { success: false, data: null, error: "Acesso negado." },
+        { status: 403 }
+      );
+    }
+
     const params = await props.params;
     const { id } = idParamSchema.parse(params);
     const body = await request.json();
@@ -93,6 +101,13 @@ export async function DELETE(
   props: { params: Promise<{ id: string }> }
 ) {
   try {
+    if (!(await requireAdmin())) {
+      return NextResponse.json(
+        { success: false, data: null, error: "Acesso negado." },
+        { status: 403 }
+      );
+    }
+
     const params = await props.params;
     const { id } = idParamSchema.parse(params);
 

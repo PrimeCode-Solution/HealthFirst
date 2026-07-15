@@ -22,10 +22,11 @@ export function useCreatePaymentMutation() {
             if(!response.ok) throw new Error("Failed to create payment");
 
             return await response.json();
-        
+
             }catch (error) {
-                throw new Error(Error.arguments);
-            
+                // Antes: `throw new Error(Error.arguments)` — destruía o erro real.
+                throw error instanceof Error ? error : new Error("Failed to create payment");
+
             } finally {
             setIsLoading(false);
         }

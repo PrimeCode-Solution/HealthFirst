@@ -4,7 +4,9 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-config";
 import { prisma } from "@/app/providers/prisma";
 
-const client = new MercadoPagoConfig({ accessToken: process.env.MP_ACCESS_TOKEN as string });
+const client = new MercadoPagoConfig({
+  accessToken: (process.env.MERCADO_PAGO_ACCESS_TOKEN || process.env.MP_ACCESS_TOKEN || "") as string,
+});
 const preApprovalClient = new PreApproval(client);
 
 export async function POST(req: Request) {

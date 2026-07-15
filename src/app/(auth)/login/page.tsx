@@ -36,7 +36,10 @@ function LoginFormContent() {
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
-  const callbackUrl = searchParams.get("callbackUrl") || "/"; 
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  const callbackUrl = searchParams.get("callbackUrl") || "/";
 
   useEffect(() => {
     const error = searchParams.get("error");
@@ -84,6 +87,14 @@ function LoginFormContent() {
       setIsGoogleLoading(false);
     }
   };
+
+  if (!mounted) {
+    return (
+      <div className="flex w-full items-center justify-center lg:w-1/2">
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex w-full flex-col justify-center px-8 lg:w-1/2 lg:px-16 xl:px-24">

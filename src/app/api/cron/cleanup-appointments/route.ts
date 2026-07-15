@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/providers/prisma";
-import { addDays, format } from "date-fns";
-import { ptBR } from "date-fns/locale";
-import { toZonedTime } from "date-fns-tz"; 
-import { sendAppointmentReminder } from "@/lib/whatsapp";
+import { startOfDay } from "date-fns";
+import { AppointmentStatus, PaymentStatus } from "@/generated/prisma";
 
 export const dynamic = "force-dynamic";
 
+// Cancela agendamentos que ficaram PENDING (não pagos) em dias que já passaram.
+// Antes, este arquivo era uma cópia do cron de lembretes e não limpava nada, deixando
+// slots ocupados por reservas abandonadas.
 export async function GET(req: NextRequest) {
   try {
     const authHeader = req.headers.get("authorization");
@@ -14,96 +15,61 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const timeZone = "America/Sao_Paulo";
-    
-    const now = new Date();
-    const nowInBrazil = toZonedTime(now, timeZone);
-    
-    const tomorrow = addDays(nowInBrazil, 1);
-    
-    const startOfTomorrow = new Date(tomorrow);
-    startOfTomorrow.setHours(0, 0, 0, 0);
+    // Só dias anteriores a hoje — não mexe em PENDING de hoje que ainda podem ser pagos.
+    const cutoff = startOfDay(new Date());
 
-    const endOfTomorrow = new Date(tomorrow);
-    endOfTomorrow.setHours(23, 59, 59, 999);
-
-    console.log(`🔍 [Cron] Buscando lembretes para intervalo: ${startOfTomorrow.toISOString()} até ${endOfTomorrow.toISOString()}`);
-
-    const appointments = await prisma.appointment.findMany({
+    const stale = await prisma.appointment.findMany({
       where: {
-        date: {
-          gte: startOfTomorrow,
-          lte: endOfTomorrow,
-        },
-        status: "CONFIRMED", 
-        reminderSent: false, 
+        status: AppointmentStatus.PENDING,
+        date: { lt: cutoff },
       },
-      include: {
-        user: {
-          select: { name: true, phone: true },
-        },
-        doctor: {
-          select: { name: true },
-        },
-      },
+      include: { payment: true },
     });
 
-    if (appointments.length === 0) {
-      return NextResponse.json({ message: "Nenhum lembrete pendente para amanhã." });
+    if (stale.length === 0) {
+      return NextResponse.json({ success: true, scanned: 0, cancelled: 0 });
     }
 
-    let successCount = 0;
-    let errorCount = 0;
+    let cancelled = 0;
 
-    for (const appointment of appointments) {
+    for (const appt of stale) {
       try {
-        const phone = appointment.patientPhone || appointment.user.phone;
-        const patientName = appointment.patientName || appointment.user.name || "Paciente";
-        const doctorName = appointment.doctor?.name || "Dr(a). Especialista";
-        
-        const timeFormatted = appointment.startTime; 
-
-        if (phone) {
-          const dateFormatted = format(appointment.date, "dd/MM 'às'", { locale: ptBR });
-          const dateAndHour = `${dateFormatted} ${timeFormatted}`;
-
-          const result = await sendAppointmentReminder(
-            phone,
-            patientName,
-            dateAndHour,
-            doctorName
-          );
-
-          if (result) {
-            await prisma.appointment.update({
-              where: { id: appointment.id },
-              data: { reminderSent: true },
-            });
-            successCount++;
-            console.log(`✅ Lembrete enviado para ${patientName} (${phone})`);
-          } else {
-            console.error(`❌ Falha envio WhatsApp para ID ${appointment.id}`);
-            errorCount++;
-          }
-        } else {
-          console.warn(`⚠️ Agendamento ${appointment.id} sem telefone válido.`);
-          errorCount++;
-        }
-      } catch (error) {
-        console.error(`❌ Falha ao processar agendamento ${appointment.id}`, error);
-        errorCount++;
+        await prisma.$transaction([
+          prisma.appointmentHistory.create({
+            data: {
+              originalId: appt.id,
+              userId: appt.userId,
+              doctorId: appt.doctorId,
+              date: appt.date,
+              status: AppointmentStatus.CANCELLED,
+              reason: "AUTO_EXPIRED_UNPAID",
+              amount: appt.payment?.amount ?? appt.amount ?? 0,
+            },
+          }),
+          prisma.appointment.update({
+            where: { id: appt.id },
+            data: { status: AppointmentStatus.CANCELLED },
+          }),
+          ...(appt.payment
+            ? [
+                prisma.payment.update({
+                  where: { id: appt.payment.id },
+                  data: { status: PaymentStatus.CANCELLED },
+                }),
+              ]
+            : []),
+        ]);
+        cancelled++;
+      } catch (err) {
+        console.error(`Falha ao expirar agendamento ${appt.id}:`, err);
       }
     }
 
-    return NextResponse.json({
-      success: true,
-      processed: appointments.length,
-      sent_success: successCount,
-      sent_errors: errorCount,
-    });
+    console.log(`🧹 [Cleanup] ${cancelled}/${stale.length} agendamentos PENDING expirados cancelados.`);
 
-  } catch (error: any) {
-    console.error("❌ Erro no Cron de Lembretes:", error);
+    return NextResponse.json({ success: true, scanned: stale.length, cancelled });
+  } catch (error) {
+    console.error("Erro no Cron de Limpeza:", error);
     return NextResponse.json({ error: "Internal Error" }, { status: 500 });
   }
 }

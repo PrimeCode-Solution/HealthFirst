@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/providers/prisma";
 import { idParamSchema } from "@/lib/validations/ebook";
 import { ApiResponse, UserEbookAccess } from "@/types/ebook";
+import { getSessionUser } from "@/lib/auth-guards";
 import { z } from "zod";
 
 // POST /api/ebooks/[id]/access - Registrar acesso/view do usuário
@@ -12,8 +13,11 @@ export async function POST(
   try {
     const params = await props.params;
     const { id } = idParamSchema.parse(params);
-    const body = await request.json();
-    const userId = body.userId; // TODO: Pegar do token de autenticação
+
+    // Identidade vem SEMPRE da sessão. Confiar num userId do body permitiria
+    // forjar registros de acesso/analytics em nome de outros usuários.
+    const sessionUser = await getSessionUser();
+    const userId = sessionUser?.id;
 
     if (!userId) {
       const response: ApiResponse = {

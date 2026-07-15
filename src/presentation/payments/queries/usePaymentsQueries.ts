@@ -21,6 +21,9 @@ export function usePaymentById(id: string) {
 export function useUserPayments(userId: string) {
     return useQuery({
     queryKey: ["userPayments", userId],
+    // ATENÇÃO: findAll() ignora o userId e retorna TODOS os pagamentos. Não existe
+    // endpoint de pagamentos por usuário no backend (/api/payments só tem [id]).
+    // Não use este hook para exibir dados sensíveis até haver um endpoint filtrado.
     queryFn: () => paymentRepository.findAll(),
     enabled: !!userId,
     });

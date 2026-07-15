@@ -19,7 +19,7 @@ export function createPaymentRepository(): PaymentRepository{
 }
 
 async function create(data:CreatePaymentDTO): Promise<Payment> {
-    const response = await api.post<Payment>("/payments");
+    const response = await api.post<Payment>("/payments", data);
     return response.data;
 }
 

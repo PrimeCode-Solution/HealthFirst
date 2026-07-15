@@ -5,9 +5,13 @@ import { sendAppointmentConfirmation } from "@/lib/whatsapp";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
+const WEBHOOK_SECRET = process.env.MERCADO_PAGO_WEBHOOK_SECRET || process.env.MP_WEBHOOK_SECRET;
+
 function validateSignature(body: string, signature: string | null, requestId: string | null): boolean {
-    const secret = process.env.MERCADO_PAGO_WEBHOOK_SECRET || process.env.MP_WEBHOOK_SECRET;
-    if (!secret || !signature || !requestId) return true;
+    // Sem segredo configurado não há como validar (ambiente de dev). Com segredo
+    // configurado, a validação é OBRIGATÓRIA: faltando headers, rejeita (fail-closed).
+    if (!WEBHOOK_SECRET) return true;
+    if (!signature || !requestId) return false;
 
     try {
         const parts = signature.split(',');
@@ -21,9 +25,12 @@ function validateSignature(body: string, signature: string | null, requestId: st
         if (!ts || !v1) return false;
 
         const manifest = `id:${JSON.parse(body).data?.id};request-id:${requestId};ts:${ts};`;
-        const hmac = crypto.createHmac('sha256', secret).update(manifest).digest('hex');
+        const hmac = crypto.createHmac('sha256', WEBHOOK_SECRET).update(manifest).digest('hex');
 
-        return hmac === v1;
+        // Comparação em tempo constante para não vazar informação por timing.
+        const a = Buffer.from(hmac, 'hex');
+        const b = Buffer.from(String(v1), 'hex');
+        return a.length === b.length && crypto.timingSafeEqual(a, b);
     } catch {
         return false;
     }
@@ -35,10 +42,10 @@ export async function POST(req: Request) {
         const signature = req.headers.get("x-signature");
         const requestId = req.headers.get("x-request-id");
 
-        if (process.env.NODE_ENV === 'production' && process.env.MP_WEBHOOK_SECRET) {
-             if (!validateSignature(bodyText, signature, requestId)) {
-                return new Response("Invalid Signature", { status: 401 });
-             }
+        // Valida a assinatura sempre que houver segredo configurado (em qualquer
+        // ambiente), não só em produção e não só com a env var MP_WEBHOOK_SECRET.
+        if (WEBHOOK_SECRET && !validateSignature(bodyText, signature, requestId)) {
+            return new Response("Invalid Signature", { status: 401 });
         }
 
         const body = JSON.parse(bodyText);
@@ -46,6 +53,16 @@ export async function POST(req: Request) {
         const resourceId = data?.id;
 
         if (!resourceId) return new Response("No Resource ID", { status: 200 });
+
+        // Idempotência: o Mercado Pago reentrega notificações. Se este evento já foi
+        // processado com sucesso, não reprocessa (evita updates redundantes/duplicados).
+        const eventId = body?.id != null ? String(body.id) : null;
+        if (eventId) {
+            const already = await prisma.processedWebhookEvent.findUnique({ where: { eventId } });
+            if (already?.processed) {
+                return new Response("Already processed", { status: 200 });
+            }
+        }
 
         let appointmentToConfirm = null;
 
@@ -174,6 +191,22 @@ export async function POST(req: Request) {
                 }
             }
         });
+
+        // Marca o evento como processado só após o sucesso da transação, para que
+        // uma falha no meio permita a reentrega ser reprocessada.
+        if (eventId) {
+            await prisma.processedWebhookEvent.upsert({
+                where: { eventId },
+                create: {
+                    eventId,
+                    type: type ?? "unknown",
+                    action: action ?? null,
+                    processed: true,
+                    processedAt: new Date(),
+                },
+                update: { processed: true, processedAt: new Date() },
+            });
+        }
 
         if (appointmentToConfirm) {
             try {

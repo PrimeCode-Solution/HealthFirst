@@ -14,10 +14,12 @@ const POLL_TIMEOUT_MS = 300000;
 // referência de `customization` muda, então ela precisa ser estável.
 // Obs: "mercadoPago" (Wallet) não entra aqui — ele exige `initialization.preferenceId`,
 // e sem isso o brick falha ao montar.
+// `debitCard` foi removido de propósito: nesta conta do Mercado Pago nenhum meio
+// de débito está `active` (todos ficam em `testing`), então habilitá-lo faz o Brick
+// disparar "payment_method_not_in_allowed_types". Crédito, PIX e boleto têm meios ativos.
 const PAYMENT_CUSTOMIZATION = {
     paymentMethods: {
         creditCard: "all",
-        debitCard: "all",
         ticket: "all",
         bankTransfer: "all", // PIX
     },
@@ -163,6 +165,15 @@ export default function TransparentPaymentForm({ amount, appointmentId, userEmai
 
     const onError = useCallback(async (error: unknown) => {
         const message = describeBrickError(error);
+
+        // Erros de configuração de meios de pagamento (ex.: um tipo sem meios ativos na
+        // conta) não bloqueiam o Brick — ele segue renderizando os meios disponíveis.
+        // Logamos como aviso e não incomodamos o usuário com um toast.
+        if (message === "payment_method_not_in_allowed_types") {
+            console.warn("Brick (não-bloqueante):", message);
+            return;
+        }
+
         console.error("Erro no Brick:", message, error);
         toast.error(message);
     }, []);

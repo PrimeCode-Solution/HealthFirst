@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/providers/prisma";
 import { sendVideoLink } from "@/lib/whatsapp";
-import { startOfDay, endOfDay, format, differenceInMinutes, parse, addHours } from "date-fns";
+import { startOfDay, endOfDay, differenceInMinutes } from "date-fns";
+import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 
 export const dynamic = "force-dynamic";
+
+const TIME_ZONE = "America/Sao_Paulo";
 
 export async function GET(req: NextRequest) {
   try {
@@ -36,15 +39,12 @@ export async function GET(req: NextRequest) {
 
     for (const app of appointments) {
       try {
-        const appointmentDateStr = format(app.date, "yyyy-MM-dd");
-        
-        let appointmentDateTime = parse(
-          `${appointmentDateStr} ${app.startTime}`, 
-          "yyyy-MM-dd HH:mm", 
-          new Date()
-        );
-
-        appointmentDateTime = addHours(appointmentDateTime, 3);
+        // O dia é guardado como meia-noite UTC (dia-calendário em UTC) e o startTime é
+        // horário local do Brasil. Interpretamos a data no fuso do Brasil e convertemos
+        // para o instante UTC real — sem depender do fuso do servidor nem do antigo
+        // "+3h" hardcoded (que só funcionava por acaso num servidor UTC).
+        const appointmentDateStr = formatInTimeZone(app.date, "UTC", "yyyy-MM-dd");
+        const appointmentDateTime = fromZonedTime(`${appointmentDateStr} ${app.startTime}`, TIME_ZONE);
 
         const minutesUntil = differenceInMinutes(appointmentDateTime, now);
 

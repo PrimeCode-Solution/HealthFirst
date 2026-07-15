@@ -12,8 +12,11 @@ export function useSubscriptionManage() {
     },
     onSuccess: () => {
       toast.success("Assinatura cancelada com sucesso.");
-      queryClient.invalidateQueries({ queryKey: ["user-subscription"] });
-      queryClient.invalidateQueries({ queryKey: ["user-profile"] });
+      // Chaves reais usadas pelas queries de assinatura (antes invalidava
+      // "user-subscription"/"user-profile", que nenhuma query usa → UI ficava desatualizada).
+      queryClient.invalidateQueries({ queryKey: ["subscriptions"] });
+      queryClient.invalidateQueries({ queryKey: ["subscriptions-user"] });
+      queryClient.invalidateQueries({ queryKey: ["subscriptions-history"] });
     },
     onError: () => {
       toast.error("Erro ao cancelar assinatura.");

@@ -3,7 +3,7 @@ import { MercadoPagoConfig, Preference } from "mercadopago";
 import { prisma } from "@/app/providers/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-config";
-import { AppointmentStatus, PaymentStatus } from "@/generated/prisma"; 
+import { AppointmentStatus, PaymentStatus, Prisma } from "@/generated/prisma";
 import { parseISO, isValid as isValidDate, startOfDay, endOfDay, format } from "date-fns";
 import { ptBR } from "date-fns/locale"; // <--- ADICIONADO: Faltava isso!
 import { z } from "zod";
@@ -245,17 +245,35 @@ export async function POST(req: NextRequest) {
         throw new Error(`Usuário inválido (ID: ${finalUserId}). Faça login novamente.`);
       }
 
-      if (doctorId) {
-        const conflictingAppointment = await tx.appointment.findFirst({
+      // Conflito de horário por SOBREPOSIÇÃO de intervalo (não só igualdade exata) e
+      // sempre executado — antes era `if (doctorId)`, então omitir o médico pulava a
+      // checagem e permitia empilhar agendamentos no mesmo slot. Com médico: checa a
+      // agenda daquele médico; sem médico: checa a agenda da clínica (recurso único).
+      const apptDate = parseISO(date);
+      if (isValidDate(apptDate) && typeof startTime === "string") {
+        const sameDay = await tx.appointment.findMany({
           where: {
-            doctorId: doctorId,
-            date: parseISO(date),
-            startTime: startTime,
-            status: { notIn: [AppointmentStatus.CANCELLED] }
-          }
+            date: { gte: startOfDay(apptDate), lte: endOfDay(apptDate) },
+            status: { notIn: [AppointmentStatus.CANCELLED] },
+            ...(doctorId ? { doctorId } : {}),
+          },
+          select: { startTime: true, endTime: true },
         });
 
-        if (conflictingAppointment) {
+        const toMin = (t: string) => {
+          const [h, m] = t.split(":").map(Number);
+          return h * 60 + m;
+        };
+        const reqStart = toMin(startTime);
+        const reqEnd = typeof endTime === "string" ? toMin(endTime) : reqStart + 1;
+
+        const clash = sameDay.some((a) => {
+          const aStart = toMin(a.startTime);
+          const aEnd = a.endTime ? toMin(a.endTime) : aStart + 1;
+          return reqStart < aEnd && reqEnd > aStart;
+        });
+
+        if (clash) {
           throw new Error("CONFLICT_ERROR");
         }
       }
@@ -290,6 +308,10 @@ export async function POST(req: NextRequest) {
       });
 
       return { appointment: newAppointment, payment: newPayment };
+    }, {
+      // Serializable impede que duas requisições concorrentes passem pela checagem
+      // de conflito ao mesmo tempo e criem dois agendamentos no mesmo slot.
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
     });
 
     try {
@@ -379,6 +401,13 @@ export async function POST(req: NextRequest) {
   } catch (e: any) {
     if (e.message === "CONFLICT_ERROR") {
       return NextResponse.json({ error: "Este horário já está reservado." }, { status: 409 });
+    }
+    // Falha de serialização (duas reservas simultâneas no mesmo slot): peça retry.
+    if (e?.code === "P2034") {
+      return NextResponse.json(
+        { error: "Este horário acabou de ser reservado. Tente outro." },
+        { status: 409 },
+      );
     }
     console.error("Erro POST /appointments:", e);
     return NextResponse.json({ error: e.message || "Falha ao criar agendamento." }, { status: 500 });

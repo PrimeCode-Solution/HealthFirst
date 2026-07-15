@@ -1,6 +1,7 @@
 import { MercadoPagoConfig, Payment } from "mercadopago";
 import { prisma } from "@/app/providers/prisma";
 import { sendAppointmentConfirmation } from "@/lib/whatsapp";
+import { getSessionUser } from "@/lib/auth-guards";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -14,6 +15,11 @@ const paymentClient = new Payment(client);
 
 export async function POST(req: Request) {
     try {
+        const sessionUser = await getSessionUser();
+        if (!sessionUser) {
+            return new Response(JSON.stringify({ error: "Não autenticado" }), { status: 401 });
+        }
+
         const body = await req.json();
         const { formData, appointmentId } = body;
 
@@ -21,15 +27,30 @@ export async function POST(req: Request) {
 
         const existingPayment = await prisma.payment.findFirst({
              where: { appointmentId },
-             include: { 
+             include: {
                 appointment: {
                     include: { user: true }
                 }
-             } 
+             }
         });
 
         if (!existingPayment) {
              return new Response(JSON.stringify({ error: "Pagamento não encontrado" }), { status: 404 });
+        }
+
+        // Ownership: só o dono do agendamento (ou um ADMIN) pode processar o pagamento.
+        if (existingPayment.appointment?.userId !== sessionUser.id && sessionUser.role !== "ADMIN") {
+            return new Response(JSON.stringify({ error: "Acesso negado" }), { status: 403 });
+        }
+
+        // Guard de idempotência: se já está confirmado, não cria uma nova cobrança no
+        // Mercado Pago (evita cobrança dupla em retry/duplo-clique).
+        if (existingPayment.status === "CONFIRMED") {
+            return new Response(JSON.stringify({
+                id: existingPayment.mercadoPagoId,
+                status: "approved",
+                alreadyPaid: true,
+            }), { status: 200, headers: { "Content-Type": "application/json" } });
         }
 
         const payerEmail = formData.payer?.email || 

@@ -1,5 +1,4 @@
 import  api  from '@/lib/api';
-import { create } from 'domain';
 
 export interface Ebook {
   id: string;
@@ -15,8 +14,13 @@ async function getByCategory(categoryName: string): Promise<Ebook[]> {
     params: { category: categoryName },
   });
 
-  
+
   return response.data as Ebook[];
+}
+
+async function create(data: Partial<Ebook>): Promise<Ebook> {
+  const response = await api.post('/ebooks', data);
+  return response.data as Ebook;
 }
 
 export const ebookService = {

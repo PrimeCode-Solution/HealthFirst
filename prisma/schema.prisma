@@ -73,6 +73,7 @@ model User {
   // Campos novos para recuperação de senha
   resetPasswordToken   String?   @unique
   resetPasswordExpires DateTime?
+  resetPasswordAttempts Int      @default(0) // Tentativas erradas de código; trava após o limite
   
   // Timestamps
   createdAt DateTime @default(now())

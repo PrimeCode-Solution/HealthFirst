@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/app/providers/prisma"; 
+import { prisma } from "@/app/providers/prisma";
 import { z } from "zod";
+import { randomInt } from "crypto";
 import { sendPasswordResetEmail } from "@/lib/email";
+
+const GENERIC_MESSAGE = "Se o e-mail existir, você receberá instruções.";
 
 const forgotPasswordSchema = z.object({
   email: z.string().email("E-mail inválido"),
@@ -17,20 +20,20 @@ export async function POST(request: Request) {
     });
 
     if (!user) {
-      return NextResponse.json(
-        { message: "Se o e-mail existir, você receberá instruções." },
-        { status: 200 }
-      );
+      return NextResponse.json({ message: GENERIC_MESSAGE }, { status: 200 });
     }
 
-    const resetToken = Math.floor(100000 + Math.random() * 900000).toString();
-    const passwordResetExpires = new Date(Date.now() + 3600000); 
+    // Código de 6 dígitos com RNG criptográfico (Math.random é previsível e não
+    // deve ser usado para segredos). Validade curta reduz a janela de brute-force.
+    const resetToken = randomInt(100000, 1000000).toString();
+    const passwordResetExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 min
 
     await prisma.user.update({
       where: { email },
       data: {
         resetPasswordToken: resetToken,
         resetPasswordExpires: passwordResetExpires,
+        resetPasswordAttempts: 0, // zera o contador de tentativas a cada novo código
       },
     });
 
@@ -52,10 +55,8 @@ export async function POST(request: Request) {
       );
     }
 
-    return NextResponse.json(
-      { message: "E-mail enviado com sucesso." },
-      { status: 200 }
-    );
+    // Mesma mensagem do caso "usuário não existe" para não permitir enumeração de e-mails.
+    return NextResponse.json({ message: GENERIC_MESSAGE }, { status: 200 });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: error.issues }, { status: 400 });

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/providers/prisma";
-import { createCategorySchema } from "@/lib/validations/ebook"; 
+import { createCategorySchema } from "@/lib/validations/ebook";
 import { ApiResponse, EbookCategory } from "@/types/ebook";
+import { requireAdmin } from "@/lib/auth-guards";
 import { z } from "zod";
 
 export async function GET() {
@@ -46,6 +47,13 @@ export async function GET() {
 // POST /api/ebook-categories - Criar categoria (apenas admin)
 export async function POST(request: NextRequest) {
   try {
+    if (!(await requireAdmin())) {
+      return NextResponse.json(
+        { success: false, data: null, error: "Acesso negado." },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json();
     const validatedData = createCategorySchema.parse(body);
 

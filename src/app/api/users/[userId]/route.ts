@@ -68,7 +68,12 @@ export async function PUT(
     const dataToUpdate: any = {};
 
     if (body.name !== undefined) dataToUpdate.name = body.name;
-    if (body.email !== undefined) dataToUpdate.email = body.email;
+    if (body.email !== undefined) {
+      if (typeof body.email !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email)) {
+        return NextResponse.json({ error: "E-mail inválido." }, { status: 400 });
+      }
+      dataToUpdate.email = body.email;
+    }
     if (body.phone !== undefined) dataToUpdate.phone = body.phone;
     
     if (body.image !== undefined) dataToUpdate.image = body.image;
@@ -98,9 +103,13 @@ export async function PUT(
     return NextResponse.json(updated);
   } catch (error) {
     console.error("Erro ao atualizar perfil:", error);
-    return NextResponse.json(
-      { error: "Internal Error", details: String(error) },
-      { status: 500 }
-    );
+    // Violação de unicidade (ex.: e-mail já usado) → 409, sem vazar o erro interno.
+    if ((error as { code?: string })?.code === "P2002") {
+      return NextResponse.json(
+        { error: "Este e-mail já está em uso." },
+        { status: 409 }
+      );
+    }
+    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
   }
 }

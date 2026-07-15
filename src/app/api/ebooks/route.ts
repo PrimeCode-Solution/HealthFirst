@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/providers/prisma";
 import { formatISO } from "date-fns";
+import { requireAdmin } from "@/lib/auth-guards";
 
 export async function GET(request: NextRequest) {
   try {
@@ -21,7 +22,9 @@ export async function GET(request: NextRequest) {
       description: ebook.description ?? undefined,
       author: ebook.author,
       coverUrl: ebook.coverImage ?? undefined,
-      downloadUrl: ebook.fileUrl,
+      // Não expor o arquivo de ebooks premium na listagem pública: o download
+      // deve passar pelo gate em /api/ebooks/[id]/download.
+      downloadUrl: ebook.isPremium ? null : ebook.fileUrl,
       isPremium: ebook.isPremium,
       price: ebook.price ? Number(ebook.price) : undefined,
       categoryId: ebook.categoryId,
@@ -50,9 +53,13 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    if (!(await requireAdmin())) {
+      return NextResponse.json({ success: false, error: "Acesso negado." }, { status: 403 });
+    }
+
     const body = await request.json();
-    
-    const { 
+
+    const {
       title, 
       description, 
       categoryId, 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/providers/prisma";
 import { updateEbookSchema, idParamSchema } from "@/lib/validations/ebook";
 import { ApiResponse, Ebook } from "@/types/ebook";
+import { requireAdmin } from "@/lib/auth-guards";
 import { z } from "zod";
 
 // GET /api/ebooks/[id] - Detalhes completos do ebook
@@ -43,7 +44,8 @@ export async function GET(
         description: ebook.description ?? undefined, // Converte null para undefined
         author: ebook.author,
         coverImage: ebook.coverImage ?? undefined,
-        fileUrl: ebook.fileUrl,
+        // Não expor o arquivo de ebooks premium: o download passa pelo gate em /download.
+        fileUrl: ebook.isPremium ? "" : ebook.fileUrl,
         isPremium: ebook.isPremium,
         price: ebook.price ? Number(ebook.price) : undefined, // Converte Decimal para number
         categoryId: ebook.categoryId,
@@ -93,6 +95,13 @@ export async function PUT(
   props: { params: Promise<{ id: string }> }
 ) {
   try {
+    if (!(await requireAdmin())) {
+      return NextResponse.json(
+        { success: false, data: null, error: "Acesso negado." },
+        { status: 403 }
+      );
+    }
+
     const params = await props.params;
     const { id } = idParamSchema.parse(params);
 
@@ -195,6 +204,13 @@ export async function DELETE(
   props: { params: Promise<{ id: string }> }
 ) {
   try {
+    if (!(await requireAdmin())) {
+      return NextResponse.json(
+        { success: false, data: null, error: "Acesso negado." },
+        { status: 403 }
+      );
+    }
+
     const params = await props.params;
     const { id } = idParamSchema.parse(params);
 

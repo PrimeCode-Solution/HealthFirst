@@ -46,7 +46,7 @@ export async function sendEmail({ to, subject, html }: SendEmailParams) {
 }
 
 export async function sendPasswordResetEmail(email: string, token: string) {
-  const resetLink = `${process.env.NEXT_PUBLIC_APP_URL}/reset-password?token=${token}`;
+  const resetLink = `${process.env.NEXT_PUBLIC_APP_URL}/reset-password?token=${token}&email=${encodeURIComponent(email)}`;
 
   const html = `
     <div style="font-family: sans-serif; background-color: #f8fafc; padding: 50px 0;">
@@ -85,7 +85,7 @@ export async function sendPasswordResetEmail(email: string, token: string) {
         <tr>
           <td style="padding: 32px 40px; background-color: #f8fafc; border-top: 1px solid #e2e8f0; text-align: center;">
             <p style="color: #94a3b8; font-size: 12px; margin-bottom: 8px;">
-              Este código é válido por 60 minutos. Se você não solicitou esta redefinição, ignore este e-mail por segurança.
+              Este código é válido por 15 minutos. Se você não solicitou esta redefinição, ignore este e-mail por segurança.
             </p>
             <p style="color: #94a3b8; font-size: 12px; margin: 0;">
               &copy; ${new Date().getFullYear()} HealthFirst. Todos os direitos reservados.

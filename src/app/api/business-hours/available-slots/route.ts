@@ -92,8 +92,10 @@ export async function GET(request: NextRequest) {
       select: { startTime: true },
     });
 
-    const busyTimes = busyAppointments.map((a) => a.startTime);
-    const availableTimes = slots.filter((slot) => !busyTimes.includes(slot));
+    // Normaliza para "HH:mm": alguns registros têm startTime como "HH:mm:ss", e a
+    // comparação exata deixava esses horários (já ocupados) aparecerem como livres.
+    const busyTimes = new Set(busyAppointments.map((a) => a.startTime.slice(0, 5)));
+    const availableTimes = slots.filter((slot) => !busyTimes.has(slot));
 
     return NextResponse.json(availableTimes, { status: 200 });
   } catch (err) {

@@ -17,13 +17,15 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { token, payer, price, planName, userId } = body;
+    const { token, payer, price, planName } = body;
 
     if (!token) {
       return NextResponse.json({ error: "Token do cartão ausente" }, { status: 400 });
     }
 
-    const targetUserId = userId || session.user.id;
+    // Sempre usar o usuário da sessão. Nunca confiar em um userId vindo do body:
+    // caso contrário um usuário logado poderia sobrescrever a assinatura de outro.
+    const targetUserId = session.user.id;
     const payerEmail = payer?.email || session.user.email;
 
     const subscription = await preApprovalClient.create({

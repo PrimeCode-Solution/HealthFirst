@@ -160,10 +160,56 @@ export async function PUT(
     }
 
     const body = await req.json().catch(() => ({}) as any);
-    const { status, ...rest } = body;
+    const { status, date, startTime, endTime, notes, patientName, patientPhone, patientEmail, doctorId } = body;
+
+    // Whitelist de campos editáveis. NUNCA espalhar `...rest` direto no update:
+    // isso permitiria a um paciente sobrescrever amount, userId, consultationTypeId, etc.
+    const data: Record<string, any> = {};
+
+    if (typeof notes === "string") data.notes = notes;
+    if (typeof patientName === "string") data.patientName = patientName;
+    if (typeof patientPhone === "string") data.patientPhone = patientPhone;
+    if (typeof patientEmail === "string") data.patientEmail = patientEmail;
+
+    // Reatribuir médico é operação exclusiva de admin.
+    if (doctorId !== undefined) {
+      if (!isAdmin) {
+        return NextResponse.json({ error: "Forbidden: only admin can reassign doctor" }, { status: 403 });
+      }
+      data.doctorId = doctorId;
+    }
+
+    // Reagendamento: se mexeu em data/horário, precisa passar pela validação de slot
+    // (dia habilitado, horário de funcionamento, almoço, duração e colisão).
+    const isReschedule = date !== undefined || startTime !== undefined || endTime !== undefined;
+    if (isReschedule) {
+      const newDateIso = date !== undefined ? String(date) : current.date.toISOString();
+      const newStart = startTime !== undefined ? startTime : current.startTime;
+      const newEnd = endTime !== undefined ? endTime : current.endTime;
+
+      const check = await validateSlotOr409({
+        dateIso: newDateIso,
+        startTime: newStart,
+        endTime: newEnd,
+        excludeAppointmentId: id,
+      });
+      if (check.error) {
+        return NextResponse.json({ error: check.error.msg }, { status: check.error.code });
+      }
+
+      if (date !== undefined) {
+        const parsed = parseISO(newDateIso);
+        if (!isValidDate(parsed)) {
+          return NextResponse.json({ error: "data inválida (ISO)" }, { status: 400 });
+        }
+        data.date = parsed;
+      }
+      data.startTime = newStart;
+      data.endTime = newEnd;
+    }
 
     let newStatus: AppointmentStatus | undefined;
-    
+
     if (typeof status === "string") {
       const allowed = Object.values(AppointmentStatus);
       if (!allowed.includes(status as AppointmentStatus)) {
@@ -188,6 +234,15 @@ export async function PUT(
         if (!isAdmin && !isAssignedDoctor && !(isOwner && hasPassed)) {
           return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }
+      } else {
+        // Qualquer outra mudança de status (ex.: CONFIRMED) é restrita a admin/médico.
+        // Impede que o paciente confirme a consulta sozinho, sem ter pago.
+        if (!isAdmin && !isAssignedDoctor) {
+          return NextResponse.json(
+            { error: "Forbidden: status change not allowed" },
+            { status: 403 },
+          );
+        }
       }
 
       newStatus = status as AppointmentStatus;
@@ -196,7 +251,7 @@ export async function PUT(
     const updated = await prisma.appointment.update({
       where: { id },
       data: {
-        ...rest,
+        ...data,
         status: newStatus ?? current.status,
       },
     });

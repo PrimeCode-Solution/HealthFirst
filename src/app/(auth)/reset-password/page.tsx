@@ -14,6 +14,8 @@ function ResetPasswordForm() {
   const router = useRouter();
   
   const [showTokenInput, setShowTokenInput] = useState(false);
+  const [email, setEmail] = useState("");
+  const [emailLocked, setEmailLocked] = useState(false);
   const [token, setToken] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -21,6 +23,13 @@ function ResetPasswordForm() {
 
   useEffect(() => {
     const tokenFromUrl = searchParams.get("token");
+    const emailFromUrl = searchParams.get("email");
+
+    if (emailFromUrl) {
+      setEmail(emailFromUrl);
+      setEmailLocked(true);
+    }
+
     if (tokenFromUrl) {
       setToken(tokenFromUrl);
       setShowTokenInput(false);
@@ -31,9 +40,13 @@ function ResetPasswordForm() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    
+
     if (password !== confirmPassword) {
       return toast.error("As senhas não coincidem");
+    }
+
+    if (!email) {
+      return toast.error("Informe o e-mail da sua conta");
     }
 
     if (!token || token.length < 6) {
@@ -46,7 +59,7 @@ function ResetPasswordForm() {
       const response = await fetch("/api/auth/reset-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, password }),
+        body: JSON.stringify({ email, token, password }),
       });
 
       const data = await response.json();
@@ -80,6 +93,20 @@ function ResetPasswordForm() {
         </CardHeader>
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
+            {!emailLocked && (
+              <div className="space-y-2">
+                <Label htmlFor="email">E-mail da conta</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="seu@email.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
+              </div>
+            )}
+
             {showTokenInput && (
               <div className="space-y-2">
                 <Label htmlFor="token">Código de Verificação</Label>

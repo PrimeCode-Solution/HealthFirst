@@ -18,11 +18,14 @@ export function useUpdatePaymentMutation() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
               });
-              
+
+              if (!response.ok) throw new Error("Failed to update payment");
+
               return await response.json();
 
             }catch (error) {
-                throw new Error(Error.arguments);
+                // Antes: `throw new Error(Error.arguments)` — destruía o erro real.
+                throw error instanceof Error ? error : new Error("Failed to update payment");
             } finally {
                 setIsLoading(false);
             }

@@ -32,7 +32,9 @@ type DaysOfWeekField =
         data: CreateBusinessHoursDTO;
     }) => businessHoursRepository.create(data),
     onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: ["CreatebusinessHours"] });
+        // As queries usam a chave ["businessHours", ...]; invalidar "CreatebusinessHours"
+        // não atualizava nada, então a lista só refletia após reload manual.
+        queryClient.invalidateQueries({ queryKey: ["businessHours"] });
         toast.success("Agendamento criado com sucesso!");
     },
     onError: (error: AxiosError) => {
