@@ -60,6 +60,8 @@ export async function GET(req: NextRequest) {
       where.userId = session.user.id;
     }
 
+    
+
     // Filtro de Data
     if (dateStart || dateEnd) {
       const ds = dateStart ? parseISO(dateStart) : undefined;
