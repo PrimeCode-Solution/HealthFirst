@@ -10,10 +10,11 @@ export function useBusinessHoursById(id: string | undefined){
         enabled: !!id,
     });
 }
-export function useAvailableSlots(id: string | undefined, date: Date | undefined){
+//Hook para os horários livres de um médico numa data (recebe o id do MÉDICO)
+export function useAvailableSlots(doctorId: string | undefined, date: Date | undefined){
     return useQuery({
-        queryKey: ["businessHoursSlots", id, date?.toISOString().slice(0, 10)],
-        queryFn: () => (id && date) ? businessHoursRepository.getAvailableSlots(id, date): [],
-        enabled: !!id && !!date
+        queryKey: ["businessHoursSlots", doctorId, date?.toISOString().slice(0, 10)],
+        queryFn: () => (doctorId && date) ? businessHoursRepository.getAvailableSlots(doctorId, date): [],
+        enabled: !!doctorId && !!date
     })
 }

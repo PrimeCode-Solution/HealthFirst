@@ -199,18 +199,20 @@ model UserEbookAccess {
 
 model BusinessHours {
   id        String   @id @default(cuid())
-  
+
   // --- Vínculo com o Médico
-  doctorId  String   @unique 
+  doctorId  String   @unique
   doctor    User     @relation(fields: [doctorId], references: [id], onDelete: Cascade)
 
-  // --- Campos de Horários
-  startTime         String    
-  endTime           String    
+  // --- Campos de Horários (legado / padrão)
+  // Mantidos como fallback: quando um dia da semana não tem registro em
+  // BusinessHoursDay, estes valores são usados. Novas edições gravam em `days`.
+  startTime         String
+  endTime           String
   lunchBreakEnabled Boolean   @default(false)
   lunchStartTime    String?
   lunchEndTime      String?
-  
+
   mondayEnabled     Boolean   @default(true)
   tuesdayEnabled    Boolean   @default(true)
   wednesdayEnabled  Boolean   @default(true)
@@ -218,13 +220,45 @@ model BusinessHours {
   fridayEnabled     Boolean   @default(true)
   saturdayEnabled   Boolean   @default(false)
   sundayEnabled     Boolean   @default(false)
-  
+
   appointmentDuration Int     @default(30)
 
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
-  
+
+  // --- Horários específicos por dia da semana
+  days          BusinessHoursDay[]
+
   @@map("business_hours")
+}
+
+// Horário específico de um dia da semana para um médico.
+// dayOfWeek segue Date#getDay(): 0 = Domingo ... 6 = Sábado.
+model BusinessHoursDay {
+  id              String        @id @default(cuid())
+
+  businessHoursId String
+  businessHours   BusinessHours @relation(fields: [businessHoursId], references: [id], onDelete: Cascade)
+
+  dayOfWeek       Int
+  enabled         Boolean       @default(false)
+
+  startTime       String
+  endTime         String
+
+  lunchBreakEnabled Boolean     @default(false)
+  lunchStartTime    String?
+  lunchEndTime      String?
+
+  // Sobrescreve BusinessHours.appointmentDuration quando preenchido
+  appointmentDuration Int?
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@unique([businessHoursId, dayOfWeek])
+  @@index([businessHoursId])
+  @@map("business_hours_days")
 }
 
 model Appointment {

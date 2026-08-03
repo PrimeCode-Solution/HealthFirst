@@ -1,29 +1,13 @@
-import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import { CreateBusinessHoursDTO } from "@/modules/business-hours/domain/businessHours.interface";
+import {
+  BusinessHoursSchema,
+  type BusinessHoursValues,
+} from "../schemas/businessHoursSchema";
 
-//Schema de validação com Zod
-export const BusinessHoursSchema = z.object({
-  startTime: z.string().min(5, "Horário inicial obrigatório"),
-  endTime: z.string().min(5, "Horário final obrigatório"),
-
-  lunchStartTime: z.string().optional(),
-  lunchEndTime: z.string().optional(),
-  lunchBreakEnabled: z.boolean().optional(),
-
-  mondayEnabled: z.boolean().optional(),
-  tuesdayEnabled: z.boolean().optional(),
-  wednesdayEnabled: z.boolean().optional(),
-  thursdayEnabled: z.boolean().optional(),
-  fridayEnabled: z.boolean().optional(),
-  saturdayEnabled: z.boolean().optional(),
-  sundayEnabled: z.boolean().optional(),
-
-  appointmentDuration: z
-    .number({ error: "Campo obrigatório" })
-    .min(5, "Duração minima de 5 minutos"),
-});
+// Schema compartilhado com o formulário de atualização e com a API
+export { BusinessHoursSchema, BusinessHoursDaySchema } from "../schemas/businessHoursSchema";
+export type { BusinessHoursValues, BusinessHoursDayValues } from "../schemas/businessHoursSchema";
 
 //Hook principal do formulário de business hours
 export const useBusinessHoursForm = () => {
@@ -35,7 +19,7 @@ export const useBusinessHoursForm = () => {
     control,
     setValue,
     watch,
-  } = useForm<CreateBusinessHoursDTO>({
+  } = useForm<BusinessHoursValues>({
     resolver: zodResolver(BusinessHoursSchema),
   });
   return {

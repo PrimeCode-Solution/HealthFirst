@@ -1,34 +1,17 @@
-import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import type { CreateBusinessHoursDTO } from "@/modules/business-hours/domain/businessHours.interface";
+import {
+  BusinessHoursSchema,
+  type BusinessHoursValues,
+} from "../schemas/businessHoursSchema";
 
-// Schema de validação com Zod
-export const BusinessHoursSchema = z.object({
-  startTime: z.string().min(5, "Horário inicial obrigatório"),
-  endTime: z.string().min(5, "Horário final obrigatório"),
-
-  // Adicionado .optional() para corresponder ao DTO
-  lunchBreakEnabled: z.boolean().optional(),
-
-  lunchStartTime: z.string().optional().or(z.literal("")),
-  lunchEndTime: z.string().optional().or(z.literal("")),
-
-  // Adicionado .optional() para corresponder ao DTO
-  mondayEnabled: z.boolean().optional(),
-  tuesdayEnabled: z.boolean().optional(),
-  wednesdayEnabled: z.boolean().optional(),
-  thursdayEnabled: z.boolean().optional(),
-  fridayEnabled: z.boolean().optional(),
-  saturdayEnabled: z.boolean().optional(),
-  sundayEnabled: z.boolean().optional(),
-
-  appointmentDuration: z.number().min(5, "Duração mínima de 5 minutos"),
-});
+// Schema compartilhado com o formulário de criação e com a API
+export { BusinessHoursSchema, BusinessHoursDaySchema } from "../schemas/businessHoursSchema";
+export type { BusinessHoursValues, BusinessHoursDayValues } from "../schemas/businessHoursSchema";
 
 // Hook principal do formulário de business hours
 export const useUpdateBusinessHoursForm = (
-  defaultValues?: Partial<CreateBusinessHoursDTO>
+  defaultValues?: Partial<BusinessHoursValues>
 ) => {
   const {
     register,
@@ -37,10 +20,11 @@ export const useUpdateBusinessHoursForm = (
     reset,
     control,
     setValue,
+    getValues,
     watch,
-  } = useForm<CreateBusinessHoursDTO>({
+  } = useForm<BusinessHoursValues>({
     resolver: zodResolver(BusinessHoursSchema),
-    defaultValues,
+    defaultValues: defaultValues as BusinessHoursValues,
   });
   return {
     register,
@@ -50,6 +34,7 @@ export const useUpdateBusinessHoursForm = (
     isSubmitting,
     control,
     setValue,
+    getValues,
     watch,
   };
 };

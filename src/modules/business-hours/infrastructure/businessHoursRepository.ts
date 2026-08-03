@@ -60,13 +60,14 @@ async function deleteCategory(id: BusinessHours["id"]): Promise<boolean> {
   }
 }
 
-// Busca slots disponíveis para uma data específica
+// Busca slots disponíveis de um médico para uma data específica.
+// A rota é /business-hours/available-slots e espera o id do médico em `doctorId`.
 async function getAvailableSlots(
-  id: BusinessHours["id"],
+  doctorId: string,
   date: Date,
 ): Promise<string[]> {
-  const response = await api.get<string[]>(
-    `/business-hours/${id}/available-slots?date=${date.toISOString().slice(0, 10)}`,
-  );
+  const response = await api.get<string[]>("/business-hours/available-slots", {
+    params: { date: date.toISOString(), doctorId },
+  });
   return response.data;
 }

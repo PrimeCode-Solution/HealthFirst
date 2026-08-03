@@ -15,5 +15,6 @@ export interface BusinessHoursRepository{
     findAll(): Promise<BusinessHours[]>;
     //Deletar um registro pelo id, retorna true se exluído, false se não encontrado 
     delete(id: string): Promise<boolean>;
-    getAvailableSlots(id: string, date: Date): Promise<string[]>;
+    //Buscar os horários livres de um médico numa data (recebe o id do MÉDICO, não do BusinessHours)
+    getAvailableSlots(doctorId: string, date: Date): Promise<string[]>;
 }

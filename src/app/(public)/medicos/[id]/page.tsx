@@ -32,7 +32,9 @@ export default async function DoctorProfilePage({ params }: DoctorPageProps) {
 
   const doctor = await prisma.user.findUnique({
     where: { id, role: 'DOCTOR' },
-    include: { businessHours: true },
+    include: {
+      businessHours: { include: { days: { orderBy: { dayOfWeek: "asc" } } } },
+    },
   });
 
   if (!doctor) notFound();

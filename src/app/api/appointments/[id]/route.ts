@@ -15,33 +15,30 @@ import {
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-config";
 import { MercadoPagoConfig, PaymentRefund } from 'mercadopago';
+import {
+  resolveDaySchedule,
+  timeToMinutes as toMinutes,
+} from "@/modules/business-hours/domain/weeklySchedule";
 
 const mpClient = new MercadoPagoConfig({ 
   accessToken: process.env.MERCADO_PAGO_ACCESS_TOKEN || process.env.MP_ACCESS_TOKEN || '' 
 });
 
-function toMinutes(hhmm: string): number {
-  const [hh, mm] = hhmm.split(":").map(Number);
-  return hh * 60 + mm;
-}
 function overlap(aStart: number, aEnd: number, bStart: number, bEnd: number) {
   return aStart < bEnd && aEnd > bStart;
 }
-function isDayEnabled(bh: any, date: Date) {
-  const wd = date.getDay();
-  const map: Record<number, boolean> = {
-    0: bh.sundayEnabled,
-    1: bh.mondayEnabled,
-    2: bh.tuesdayEnabled,
-    3: bh.wednesdayEnabled,
-    4: bh.thursdayEnabled,
-    5: bh.fridayEnabled,
-    6: bh.saturdayEnabled,
-  };
-  return !!map[wd];
-}
-async function getBusinessHoursOrThrow() {
-  const bh = await prisma.businessHours.findFirst();
+
+// A escala é por médico e por dia da semana. Sem doctorId (agendamentos antigos
+// sem médico atribuído) mantemos o comportamento anterior de usar a primeira
+// configuração cadastrada.
+async function getBusinessHoursOrThrow(doctorId?: string | null) {
+  const bh = doctorId
+    ? await prisma.businessHours.findUnique({
+        where: { doctorId },
+        include: { days: true },
+      })
+    : await prisma.businessHours.findFirst({ include: { days: true } });
+
   if (!bh) throw new Error("BusinessHours não configurado");
   return bh;
 }
@@ -50,9 +47,10 @@ async function validateSlotOr409(params: {
   dateIso: string;
   startTime: string;
   endTime: string;
+  doctorId?: string | null;
   excludeAppointmentId?: string;
 }) {
-  const { dateIso, startTime, endTime, excludeAppointmentId } = params;
+  const { dateIso, startTime, endTime, doctorId, excludeAppointmentId } = params;
 
   const dateObj = parseISO(String(dateIso));
   if (!isValidDate(dateObj)) {
@@ -74,22 +72,28 @@ async function validateSlotOr409(params: {
     return { error: { code: 400, msg: "intervalo de horário inválido" } };
   }
 
-  const bh = await getBusinessHoursOrThrow();
-  if (!isDayEnabled(bh, dateObj)) {
+  const bh = await getBusinessHoursOrThrow(doctorId);
+  const daySchedule = resolveDaySchedule(bh, dateObj.getDay());
+
+  if (!daySchedule.enabled) {
     return {
       error: { code: 409, msg: "dia indisponível segundo BusinessHours" },
     };
   }
 
-  const bhStart = toMinutes(bh.startTime);
-  const bhEnd = toMinutes(bh.endTime);
+  const bhStart = toMinutes(daySchedule.startTime);
+  const bhEnd = toMinutes(daySchedule.endTime);
   if (startMin < bhStart || endMin > bhEnd) {
     return { error: { code: 409, msg: "fora do horário de funcionamento" } };
   }
 
-  if (bh.lunchBreakEnabled && bh.lunchStartTime && bh.lunchEndTime) {
-    const lStart = toMinutes(bh.lunchStartTime);
-    const lEnd = toMinutes(bh.lunchEndTime);
+  if (
+    daySchedule.lunchBreakEnabled &&
+    daySchedule.lunchStartTime &&
+    daySchedule.lunchEndTime
+  ) {
+    const lStart = toMinutes(daySchedule.lunchStartTime);
+    const lEnd = toMinutes(daySchedule.lunchEndTime);
     if (overlap(startMin, endMin, lStart, lEnd)) {
       return {
         error: { code: 409, msg: "intervalo colide com horário de almoço" },
@@ -97,7 +101,7 @@ async function validateSlotOr409(params: {
     }
   }
 
-  const expected = bh.appointmentDuration ?? 30;
+  const expected = daySchedule.appointmentDuration ?? 30;
   if (endMin - startMin !== expected) {
     return {
       error: { code: 400, msg: "duration_mismatch", expectedMin: expected },
@@ -191,6 +195,7 @@ export async function PUT(
         dateIso: newDateIso,
         startTime: newStart,
         endTime: newEnd,
+        doctorId: data.doctorId ?? current.doctorId,
         excludeAppointmentId: id,
       });
       if (check.error) {
