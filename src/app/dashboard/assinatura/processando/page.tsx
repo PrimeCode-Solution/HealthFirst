@@ -5,35 +5,54 @@ import { useEffect, useState, Suspense } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
+import { usePaymentStatus } from "@/presentation/payments/queries/usePaymentStatus";
 
 function ProcessandoContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
 
-  const mpStatus = searchParams.get("status"); 
+  const mpStatus = searchParams.get("status");
+  const paymentId = searchParams.get("payment_id");
+
+  const { data: paymentData, isLoading } = usePaymentStatus(paymentId || "");
 
   useEffect(() => {
-    if (!mpStatus) {
-        setStatus("error");
-        return;
-    }
+    if (paymentId) return;
 
     if (mpStatus === "approved") {
       setStatus("success");
       toast.success("Assinatura confirmada com sucesso!");
-    } else {
+    } else if (mpStatus === "rejected" || mpStatus === "failure") {
       setStatus("error");
       toast.error("Houve um problema com o pagamento da assinatura.");
     }
-  }, [mpStatus]);
+  }, [mpStatus, paymentId]);
 
-  if (status === "loading") {
+  useEffect(() => {
+    if (!paymentData) return;
+
+    if (paymentData.status === "APPROVED") {
+      setStatus("success");
+      toast.success("Pagamento aprovado!");
+      
+      setTimeout(() => {
+        router.push("/dashboard");
+      }, 2000);
+    } else if (paymentData.status === "REJECTED") {
+      setStatus("error");
+      toast.error("Pagamento rejeitado.");
+    }
+  }, [paymentData, router]);
+
+  if (status === "loading" || isLoading) {
     return (
       <>
         <Loader2 className="h-16 w-16 animate-spin text-blue-500" />
         <p className="text-muted-foreground">Verificando status do pagamento...</p>
+        <Progress className="w-[60%] mt-4" />
       </>
     );
   }
@@ -41,10 +60,10 @@ function ProcessandoContent() {
   if (status === "success") {
     return (
       <>
-        <CheckCircle2 className="h-16 w-16 text-green-500" />
+        <CheckCircle2 className="h-16 w-16 text-green-500 animate-in zoom-in duration-500" />
         <h2 className="text-xl font-bold text-green-700">Tudo Certo!</h2>
         <p className="text-muted-foreground">
-          Sua assinatura foi ativada. Você agora tem acesso aos recursos premium.
+          Sua assinatura foi ativada. Você será redirecionado em instantes.
         </p>
         <Button 
           className="mt-4 w-full" 
@@ -56,7 +75,6 @@ function ProcessandoContent() {
     );
   }
 
-  // status === "error"
   return (
     <>
       <XCircle className="h-16 w-16 text-red-500" />
@@ -64,26 +82,25 @@ function ProcessandoContent() {
       <p className="text-muted-foreground">
         Não conseguimos confirmar a aprovação imediata. Se você pagou, aguarde alguns instantes.
       </p>
-      <div className="flex w-full gap-2 mt-4">
-          <Button 
-            variant="outline" 
-            className="w-full"
-            onClick={() => router.push("/dashboard")}
-          >
-            Voltar
-          </Button>
-          <Button 
-            className="w-full"
-            onClick={() => window.location.reload()}
-          >
-            Tentar Novamente
-          </Button>
+      <div className="flex flex-col w-full gap-2 mt-4">
+        <Button 
+          className="w-full"
+          onClick={() => window.location.reload()}
+        >
+          Tentar Novamente
+        </Button>
+        <Button 
+          variant="outline" 
+          className="w-full"
+          onClick={() => router.push("/dashboard")}
+        >
+          Voltar
+        </Button>
       </div>
     </>
   );
 }
 
-// 2. O componente da página principal envolve o conteúdo em Suspense
 export default function AssinaturaProcessandoPage() {
   return (
     <div className="flex h-[80vh] w-full items-center justify-center p-4">
